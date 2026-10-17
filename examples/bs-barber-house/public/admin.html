@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel do barbeiro | BS Barber House</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0d0d0e">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin">
+  <!-- Login -->
+  <div id="loginView" class="login-wrap" hidden>
+    <form class="login-card" id="loginForm">
+      <div class="brand login-brand"><span class="brand-mark">BS</span><span class="brand-name">Barber House</span></div>
+      <h1>Área do barbeiro</h1>
+      <p class="muted">Digite a senha para acessar o painel.</p>
+      <div class="field">
+        <label for="password">Senha</label>
+        <div class="pw-wrap">
+          <input class="input" id="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" id="pwToggle" aria-label="Mostrar senha">👁</button>
+        </div>
+      </div>
+      <p class="form-error" id="loginError" role="alert"></p>
+      <button class="btn btn-gold btn-lg btn-block" type="submit">Entrar</button>
+      <a href="/" class="back-link">← Voltar ao site</a>
+    </form>
+  </div>
+
+  <!-- Painel -->
+  <div id="appView" hidden>
+    <header class="admin-top">
+      <div class="container admin-top-inner">
+        <a href="/" class="brand" target="_blank" rel="noopener" title="Abrir o site">
+          <span class="brand-mark">BS</span><span class="brand-name">Painel</span>
+        </a>
+        <nav class="tabs" id="tabs">
+          <button data-tab="painel" class="active"><span class="t-ico">📊</span>Painel</button>
+          <button data-tab="agenda"><span class="t-ico">📅</span>Agenda</button>
+          <button data-tab="clientes"><span class="t-ico">👥</span>Clientes</button>
+          <button data-tab="bloqueios"><span class="t-ico">⛔</span>Bloqueios</button>
+          <button data-tab="galeria"><span class="t-ico">🖼️</span>Galeria</button>
+        </nav>
+        <div class="top-actions">
+          <button class="btn btn-gold btn-sm" id="newBookingBtn">+ Novo agendamento</button>
+          <button class="btn btn-ghost btn-sm" id="logoutBtn">Sair</button>
+        </div>
+      </div>
+    </header>
+
+    <button class="fab" id="fabNew" aria-label="Novo agendamento">+</button>
+
+    <main class="container admin-main">
+      <div class="alert" id="defaultPwAlert" hidden>
+        ⚠️ Você está usando a senha padrão. Defina a variável <code>ADMIN_PASSWORD</code> no servidor para trocar.
+      </div>
+
+      <!-- PAINEL -->
+      <section class="tab" id="tab-painel">
+        <div class="page-head">
+          <h1>Visão geral</h1>
+          <div class="chips" id="periodChips">
+            <button data-period="today">Hoje</button>
+            <button data-period="7d">7 dias</button>
+            <button data-period="month" class="active">Este mês</button>
+            <button data-period="lastmonth">Mês passado</button>
+            <button data-period="custom">Personalizado</button>
+          </div>
+        </div>
+        <div class="custom-range" id="customRange" hidden>
+          <label>De <input type="date" class="input" id="dashFrom"></label>
+          <label>Até <input type="date" class="input" id="dashTo"></label>
+          <button class="btn btn-gold btn-sm" id="dashApply">Aplicar</button>
+        </div>
+        <div class="kpis" id="kpis"></div>
+        <div class="panel warn" id="pendingPanel" hidden>
+          <h3>⏳ Atendimentos que já passaram e estão sem baixa</h3>
+          <p class="muted small">Marque como concluído (entra nos ganhos) ou como falta.</p>
+          <div id="pendingList"></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Ganhos por dia</h3>
+            <div class="legend"><span class="lg done"></span>Recebido <span class="lg fore"></span>Previsto</div>
+            <div class="chart" id="chart"></div>
+          </div>
+          <div class="panel">
+            <h3>Serviços mais procurados</h3>
+            <div id="topServices"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Hoje — <span id="todayLabel"></span></h3>
+          <div id="todayList"></div>
+        </div>
+      </section>
+
+      <!-- AGENDA -->
+      <section class="tab" id="tab-agenda" hidden>
+        <div class="page-head">
+          <h1>Agenda</h1>
+          <div class="chips" id="agendaQuick">
+            <button data-quick="today" class="active">Hoje</button>
+            <button data-quick="tomorrow">Amanhã</button>
+            <button data-quick="week">Próximos 7 dias</button>
+            <button data-quick="next30">Próximos 30 dias</button>
+            <button data-quick="past30">Últimos 30 dias</button>
+          </div>
+        </div>
+        <div class="filters panel">
+          <label>De <input type="date" class="input" id="fFrom"></label>
+          <label>Até <input type="date" class="input" id="fTo"></label>
+          <label>Status
+            <select class="input" id="fStatus">
+              <option value="">Todos</option>
+              <option value="agendado">Agendado</option>
+              <option value="concluido">Concluído</option>
+              <option value="cancelado">Cancelado</option>
+              <option value="faltou">Faltou</option>
+            </select>
+          </label>
+          <label>Serviço <select class="input" id="fService"><option value="">Todos</option></select></label>
+          <label class="grow">Buscar <input type="search" class="input" id="fSearch" placeholder="Nome, telefone ou código"></label>
+          <button class="btn btn-ghost btn-sm" id="exportCsv">⬇ Exportar planilha</button>
+        </div>
+        <div class="agenda-summary" id="agendaSummary"></div>
+        <div id="agendaList"></div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section class="tab" id="tab-clientes" hidden>
+        <div class="page-head">
+          <h1>Clientes</h1>
+          <input type="search" class="input search-sm" id="clientSearch" placeholder="Buscar cliente">
+        </div>
+        <p class="muted small">Histórico de quem já agendou. Clientes que não voltam há mais de 30 dias aparecem como “sumido” — mande uma mensagem chamando de volta!</p>
+        <div id="clientList"></div>
+      </section>
+
+      <!-- BLOQUEIOS -->
+      <section class="tab" id="tab-bloqueios" hidden>
+        <div class="page-head"><h1>Bloqueios de horário</h1></div>
+        <p class="muted small">Use para folgas, almoço, compromissos ou feriados. Horários bloqueados não aparecem para os clientes.</p>
+        <form class="panel block-form" id="blockForm">
+          <label>Data <input type="date" class="input" id="bDate" required></label>
+          <label class="check"><input type="checkbox" id="bAllDay"> Dia inteiro</label>
+          <label>Início <input type="time" class="input" id="bStart" value="12:00"></label>
+          <label>Fim <input type="time" class="input" id="bEnd" value="13:00"></label>
+          <label class="grow">Motivo <input class="input" id="bReason" maxlength="80" placeholder="Ex.: almoço, folga, médico"></label>
+          <button class="btn btn-gold" type="submit">Bloquear</button>
+        </form>
+        <div id="blockList"></div>
+      </section>
+
+      <!-- GALERIA -->
+      <section class="tab" id="tab-galeria" hidden>
+        <div class="page-head"><h1>Galeria de cortes</h1></div>
+        <p class="muted small">As fotos aparecem na seção “Nossos cortes” do site. Dica: fotos em pé (retrato) ficam melhores.</p>
+        <form class="panel upload-form" id="uploadForm">
+          <label class="file-drop">
+            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" multiple>
+            <span>📷 Toque para escolher fotos</span>
+          </label>
+          <label class="grow">Legenda (opcional) <input class="input" id="photoCaption" maxlength="60" placeholder="Ex.: Degradê navalhado"></label>
+          <button class="btn btn-gold" type="submit" id="uploadBtn">Enviar fotos</button>
+        </form>
+        <div class="admin-gallery" id="adminGallery"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="modal" class="modal">
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose" aria-label="Fechar">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </dialog>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/admin-core.js"></script>
+  <script src="/js/admin-dashboard.js"></script>
+  <script src="/js/admin-agenda.js"></script>
+  <script src="/js/admin-extra.js"></script>
+</body>
+</html>

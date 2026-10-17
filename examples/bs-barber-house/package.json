@@ -1,0 +1,13 @@
+{
+  "name": "bs-barber-house",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Site e agendamento online da BS Barber House (Castro-PR), com painel do barbeiro.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,6 +1,6 @@
 /* Fluxo de agendamento do cliente: serviço → dia/horário → dados → comprovante. */
 (async () => {
-  const { esc, brl, fmtDuration, fmtDateLong, fmtDateShort, endTime, api } = BS;
+  const { esc, brl, fmtDuration, fmtDateLong, endTime, api } = BS;
   const $ = (id) => document.getElementById(id);
 
   const state = { service: null, date: null, time: null };
@@ -62,30 +62,68 @@
   }
 
   // ----------------------------------------------------------------- datas
+  const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const lastDay = BS.addDays(cfg.today, cfg.bookingWindowDays);
+  const isBookable = (d) => d >= cfg.today && d <= lastDay && cfg.hours.days.includes(BS.parseDate(d).getDay());
+
   function openDays() {
     const days = [];
-    for (let i = 0; i <= cfg.bookingWindowDays; i++) {
-      const d = BS.addDays(cfg.today, i);
-      if (cfg.hours.days.includes(BS.parseDate(d).getDay())) days.push(d);
-    }
+    for (let d = cfg.today; d <= lastDay; d = BS.addDays(d, 1)) if (isBookable(d)) days.push(d);
     return days;
   }
 
-  $('dateStrip').innerHTML = openDays().map((d, i) => {
-    const label = i === 0 && d === cfg.today ? 'Hoje' : BS.weekday(d).slice(0, 3);
-    return `<button type="button" class="day" role="listitem" data-date="${d}">
-      <small>${label}</small><strong>${d.slice(8)}</strong><small>${fmtDateShort(d).slice(3)}</small></button>`;
-  }).join('');
+  // Calendário mensal: mês atual com setas ▲ ▼ para trocar de mês.
+  let view = BS.parseDate(cfg.today);
+  view = new Date(view.getFullYear(), view.getMonth(), 1);
+  const monthKey = (d) => d.getFullYear() * 12 + d.getMonth();
+  const minMonth = monthKey(BS.parseDate(cfg.today));
+  const maxMonth = monthKey(BS.parseDate(lastDay));
+
+  function renderCalendar() {
+    const y = view.getFullYear();
+    const m = view.getMonth();
+    const first = new Date(y, m, 1);
+    const start = new Date(y, m, 1 - first.getDay()); // começa no domingo
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+      const d = BS.isoDate(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+      const other = BS.parseDate(d).getMonth() !== m;
+      const cls = ['cal-day', other && 'other', d === cfg.today && 'today', d === state.date && 'selected'].filter(Boolean).join(' ');
+      cells.push(`<button type="button" class="${cls}" data-date="${d}" ${isBookable(d) ? '' : 'disabled'}
+        aria-label="${BS.fmtDateLong(d)}${isBookable(d) ? '' : ' (indisponível)'}">${Number(d.slice(8))}</button>`);
+    }
+    $('dateStrip').innerHTML = `
+      <div class="cal-head">
+        <strong>${MONTHS[m]} de ${y}</strong>
+        <div class="cal-nav">
+          <button type="button" data-month="-1" aria-label="Mês anterior" ${monthKey(view) <= minMonth ? 'disabled' : ''}>▲</button>
+          <button type="button" data-month="1" aria-label="Próximo mês" ${monthKey(view) >= maxMonth ? 'disabled' : ''}>▼</button>
+        </div>
+      </div>
+      <div class="cal-grid">
+        ${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((w) => `<span class="cal-wd">${w}</span>`).join('')}
+        ${cells.join('')}
+      </div>
+      <p class="cal-note">Atendimento de segunda a sábado. Dias apagados não estão disponíveis.</p>`;
+  }
 
   $('dateStrip').addEventListener('click', (e) => {
-    const btn = e.target.closest('.day');
-    if (btn) selectDate(btn.dataset.date);
+    const nav = e.target.closest('[data-month]');
+    if (nav && !nav.disabled) {
+      view = new Date(view.getFullYear(), view.getMonth() + Number(nav.dataset.month), 1);
+      renderCalendar();
+      return;
+    }
+    const btn = e.target.closest('.cal-day');
+    if (btn && !btn.disabled) selectDate(btn.dataset.date);
   });
 
   function selectDate(date) {
     state.date = date;
     state.time = null;
-    for (const b of $('dateStrip').children) b.classList.toggle('selected', b.dataset.date === date);
+    const d = BS.parseDate(date);
+    view = new Date(d.getFullYear(), d.getMonth(), 1);
+    renderCalendar();
     updateSummary();
     loadSlots();
   }
@@ -98,13 +136,14 @@
         const { slots } = await api(`/api/availability?date=${d}&service=${encodeURIComponent(state.service.id)}`);
         if (slots.length) {
           selectDate(d);
-          $('dateStrip').querySelector('.selected')?.scrollIntoView({ block: 'nearest', inline: 'center' });
           return;
         }
       } catch { break; }
     }
     selectDate(days[0]);
   }
+
+  renderCalendar();
 
   // -------------------------------------------------------------- horários
   let slotsReq = 0;

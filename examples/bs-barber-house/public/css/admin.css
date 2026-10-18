@@ -3,8 +3,9 @@
 code { background: var(--card-2); padding: 2px 6px; border-radius: 6px; font-size: .85em; }
 
 /* login */
+.login-wrap .credit { background: none; border: 0; padding: 0; }
 .login-wrap {
-  min-height: 100vh; display: grid; place-items: center; padding: 20px;
+  min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 24px; padding: 20px;
   background: radial-gradient(ellipse at 50% 0%, rgba(248, 103, 8, .15), transparent 60%), var(--bg);
 }
 .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 34px; box-shadow: var(--shadow); }
@@ -157,6 +158,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .history { font-size: .82rem; color: var(--muted); margin: 0; padding-left: 18px; }
 
 @media (max-width: 960px) {
+  #appView > .credit { padding-bottom: 86px; }
   .grid-2 { grid-template-columns: 1fr; }
   .admin-top { backdrop-filter: none; -webkit-backdrop-filter: none; }
   .top-actions #newBookingBtn { display: none; }

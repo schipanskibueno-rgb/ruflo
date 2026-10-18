@@ -18,7 +18,7 @@
 .stepper li.active span, .stepper li.done span { background: var(--gold); color: var(--gold-ink); }
 .stepper li.done { color: var(--gold-2); }
 
-.booking-layout { display: grid; grid-template-columns: 1fr 300px; gap: 26px; align-items: start; }
+.booking-layout { max-width: 780px; margin: 0 auto; }
 .booking-main { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; }
 
 .service-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -67,15 +67,6 @@
 
 .step-nav { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
 
-.summary { position: sticky; top: 90px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
-.summary h3 { font-size: 1.15rem; text-transform: uppercase; letter-spacing: .08em; }
-.summary dl { margin: 0; }
-.summary dl div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.summary dt { color: var(--muted); }
-.summary dd { margin: 0; text-align: right; font-weight: 600; }
-.summary .total { border-bottom: 0; }
-.summary .total dd { color: var(--gold-2); font: 600 1.4rem/1 var(--font-head); }
-.summary-note { color: var(--muted); font-size: .82rem; margin: 10px 0 0; }
 
 /* confirmação */
 .done { max-width: 620px; margin: 0 auto; }
@@ -107,12 +98,7 @@
 .center { text-align: center; }
 
 @media (max-width: 860px) {
-  .booking-layout { grid-template-columns: 1fr; }
-  .summary { position: static; order: -1; padding: 16px 20px; }
-  .summary h3 { display: none; }
-  .summary dl div { padding: 6px 0; }
-  .summary-note { display: none; }
-  .booking-main { padding: 20px; }
+          .booking-main { padding: 20px; }
 }
 @media (max-width: 520px) {
   .stepper { flex-wrap: nowrap; gap: 4px; }

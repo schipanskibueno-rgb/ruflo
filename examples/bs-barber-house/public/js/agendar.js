@@ -26,14 +26,6 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function updateSummary() {
-    const s = state.service;
-    $('sumService').textContent = s ? s.name : '—';
-    $('sumDate').textContent = state.date ? fmtDateLong(state.date) : '—';
-    $('sumTime').textContent = state.time ? `${state.time} às ${endTime(state.time, s.duration)}` : '—';
-    $('sumPrice').textContent = s ? brl(s.price) : '—';
-  }
-
   document.addEventListener('click', (e) => {
     const go = e.target.closest('[data-go]');
     if (go) goTo(Number(go.dataset.go));
@@ -55,7 +47,6 @@
     state.service = byId[id];
     state.time = null;
     for (const b of $('serviceOptions').children) b.classList.toggle('selected', b.dataset.id === id);
-    updateSummary();
     goTo(2);
     if (!state.date) selectFirstAvailable();
     else loadSlots();
@@ -124,7 +115,6 @@
     const d = BS.parseDate(date);
     view = new Date(d.getFullYear(), d.getMonth(), 1);
     renderCalendar();
-    updateSummary();
     loadSlots();
   }
 
@@ -176,7 +166,6 @@
     if (!btn) return;
     state.time = btn.dataset.time;
     for (const b of $('slots').querySelectorAll('.slot')) b.classList.toggle('selected', b === btn);
-    updateSummary();
     goTo(3);
   });
 
@@ -212,7 +201,6 @@
       if (err.status === 409) {
         BS.toast(err.message, 'error');
         state.time = null;
-        updateSummary();
         goTo(2);
         loadSlots();
       } else {
@@ -292,7 +280,6 @@
   }
 
   // ---------------------------------------------------------------- início
-  updateSummary();
   const preselect = new URLSearchParams(location.search).get('servico');
   if (preselect && byId[preselect]) selectService(preselect);
   else goTo(1);

@@ -69,7 +69,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 /* gráfico */
 .legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .8rem; margin: -6px 0 12px; }
 .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-.lg.done { background: var(--gold); }
+.lg.got { background: var(--gold); }
 .lg.fore { background: rgba(201, 163, 90, .25); border: 1px dashed var(--gold); margin-left: 10px; }
 .chart { display: flex; align-items: flex-end; gap: 4px; height: 200px; overflow-x: auto; padding-bottom: 22px; position: relative; }
 .bar { flex: 1 0 8px; display: flex; flex-direction: column-reverse; height: 100%; position: relative; cursor: default; }

@@ -5,7 +5,7 @@ code { background: var(--card-2); padding: 2px 6px; border-radius: 6px; font-siz
 /* login */
 .login-wrap {
   min-height: 100vh; display: grid; place-items: center; padding: 20px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(201, 163, 90, .15), transparent 60%), var(--bg);
+  background: radial-gradient(ellipse at 50% 0%, rgba(248, 103, 8, .15), transparent 60%), var(--bg);
 }
 .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 34px; box-shadow: var(--shadow); }
 .login-brand { justify-content: center; margin-bottom: 22px; }
@@ -25,7 +25,7 @@ code { background: var(--card-2); padding: 2px 6px; border-radius: 6px; font-siz
   border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;
 }
 .tabs button:hover { color: var(--text); background: var(--card); }
-.tabs button.active { color: var(--gold-2); background: rgba(201, 163, 90, .12); }
+.tabs button.active { color: var(--gold-2); background: rgba(248, 103, 8, .12); }
 .top-actions { display: flex; gap: 8px; }
 
 .admin-main { padding-top: 26px; padding-bottom: 100px; }
@@ -63,18 +63,18 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .kpi small { display: block; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
 .kpi strong { display: block; font: 600 1.9rem/1.2 var(--font-head); margin-top: 6px; }
 .kpi span { color: var(--muted); font-size: .82rem; }
-.kpi.main { background: linear-gradient(135deg, rgba(201, 163, 90, .22), rgba(201, 163, 90, .05)); border-color: rgba(201, 163, 90, .5); }
+.kpi.main { background: linear-gradient(135deg, rgba(248, 103, 8, .22), rgba(248, 103, 8, .05)); border-color: rgba(248, 103, 8, .5); }
 .kpi.main strong { color: var(--gold-2); }
 
 /* gráfico */
 .legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .8rem; margin: -6px 0 12px; }
 .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .lg.got { background: var(--gold); }
-.lg.fore { background: rgba(201, 163, 90, .25); border: 1px dashed var(--gold); margin-left: 10px; }
+.lg.fore { background: rgba(248, 103, 8, .25); border: 1px dashed var(--gold); margin-left: 10px; }
 .chart { display: flex; align-items: flex-end; gap: 4px; height: 200px; overflow-x: auto; padding-bottom: 22px; position: relative; }
 .bar { flex: 1 0 8px; display: flex; flex-direction: column-reverse; height: 100%; position: relative; cursor: default; }
 .bar .seg-done { background: var(--gold); border-radius: 0 0 3px 3px; }
-.bar .seg-fore { background: rgba(201, 163, 90, .25); border: 1px dashed rgba(201, 163, 90, .7); border-bottom: 0; border-radius: 3px 3px 0 0; }
+.bar .seg-fore { background: rgba(248, 103, 8, .25); border: 1px dashed rgba(248, 103, 8, .7); border-bottom: 0; border-radius: 3px 3px 0 0; }
 .bar .seg-done:only-child, .bar .seg-done:last-child { border-radius: 3px; }
 .bar label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: .65rem; color: var(--muted); white-space: nowrap; }
 .bar:hover .seg-done { background: var(--gold-2); }

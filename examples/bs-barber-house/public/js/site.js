@@ -38,21 +38,29 @@
     document.getElementById('servicesGrid').innerHTML = '<p class="muted">Não foi possível carregar os serviços agora.</p>';
   });
 
-  const PLACEHOLDERS = ['Degradê', 'Corte social', 'Barba desenhada', 'Navalhado', 'Corte + barba', 'Platinado'];
+  // Fotos reais do Instagram @bs_barberhouse (public/img/galeria).
+  const PHOTOS = [
+    ['/img/galeria/01.jpg', 'Low fade + barba'],
+    ['/img/galeria/02.jpg', 'Corte na tesoura'],
+    ['/img/galeria/03.jpg', 'Mid fade'],
+    ['/img/galeria/04.jpg', 'High fade'],
+    ['/img/galeria/05.jpg', 'Taper + barba'],
+    ['/img/galeria/06.jpg', 'Low taper'],
+    ['/img/galeria/07.jpg', 'Degradê infantil'],
+    ['/img/galeria/08.jpg', 'Low fade + barba'],
+  ].map(([url, caption]) => ({ url, caption }));
   const gallery = document.getElementById('gallery');
-
-  BS.api('/api/gallery').then((photos) => {
-    if (!photos.length) {
-      gallery.innerHTML = PLACEHOLDERS.map((label) => `
-        <figure><div class="ph"><svg><use href="#i-scissors"/></svg></div><figcaption>${esc(label)}</figcaption></figure>`).join('');
-      gallery.insertAdjacentHTML('afterend', '<p class="gallery-note">Em breve, fotos dos nossos cortes aqui.</p>');
-      return;
-    }
+  const renderGallery = (photos) => {
     gallery.innerHTML = photos.map((p) => `
       <figure data-src="${esc(p.url)}">
         <img src="${esc(p.url)}" alt="${esc(p.caption || 'Corte da BS Barber House')}" loading="lazy">
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
       </figure>`).join('');
+  };
+  renderGallery(PHOTOS);
+  // Fotos enviadas pelo painel aparecem primeiro.
+  BS.api('/api/gallery').then((uploaded) => {
+    if (uploaded.length) renderGallery([...uploaded, ...PHOTOS]);
   }).catch(() => {});
 
   gallery.addEventListener('click', (e) => {

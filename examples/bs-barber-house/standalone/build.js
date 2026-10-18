@@ -76,7 +76,13 @@ const router = `
 })();`;
 
 const css = ['css/style.css', 'css/agendar.css', 'css/admin.css'].map(read).join('\n');
-const favicon = `data:image/svg+xml,${encodeURIComponent(read('img/favicon.svg').trim())}`;
+
+// Imagens (logo, fotos) vão embutidas no próprio arquivo como data URI.
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+const inlineImages = (text) => text.replace(/\/img\/([\w/.-]+\.(?:png|jpg|svg))/g, (_, rel) => {
+  const file = path.join(PUB, 'img', rel);
+  return `data:${MIME[path.extname(file)]};base64,${fs.readFileSync(file).toString('base64')}`;
+});
 
 const html = `<!doctype html>
 <html lang="pt-BR">
@@ -84,12 +90,12 @@ const html = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BS Barber House | Barbearia em Castro-PR</title>
-  <meta name="description" content="BS Barber House — barbearia em Castro-PR. Corte, barba, sobrancelha e tratamentos. Agende seu horário online, sem cadastro.">
-  <meta name="theme-color" content="#0d0d0e">
-  <link rel="icon" href="${favicon}" type="image/svg+xml">
+  <meta name="description" content="BS Barber House — barbearia em Castro-PR. Especialista em encontrar sua melhor versão. Agende online, sem cadastro.">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
   <!-- Gerado por standalone/build.js — edite os arquivos em public/ e rode o build de novo. -->
   <style>
 ${css}
@@ -111,5 +117,5 @@ ${Object.entries(js).map(([name, code]) => `<script>/* ${name} */\n${code}</scri
 </html>
 `;
 
-fs.writeFileSync(OUT, html);
-console.log(`Gerado ${path.relative(process.cwd(), OUT)} (${(html.length / 1024).toFixed(0)} KB)`);
+fs.writeFileSync(OUT, inlineImages(html));
+console.log(`Gerado ${path.relative(process.cwd(), OUT)} (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB)`);

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Gera barbearia-machado.html: o index.html com as imagens de img/ embutidas (arquivo único).
+"""Gera os arquivos únicos (imagens de img/ embutidas):
+
+- index.html       -> barbearia-machado.html   (site completo)
+- agendamento.html -> agendamento-machado.html (só agendamento)
 
 Uso: python3 build.py
 """
@@ -9,9 +12,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-SRC = ROOT / "index.html"
-OUT = ROOT / "barbearia-machado.html"
+PAGES = {"index.html": "barbearia-machado.html", "agendamento.html": "agendamento-machado.html"}
 REF = re.compile(r"""(?P<q>["'(])(?P<path>img/[\w./-]+\.(?:jpe?g|png|webp|svg))""")
+SOURCE_NOTE = re.compile(r"<!-- (?:Fonte do site|Página só de agendamento)\. Rode `python3 build\.py`[^>]*-->")
 
 
 def inline(match: re.Match) -> str:
@@ -23,10 +26,9 @@ def inline(match: re.Match) -> str:
     return f"{match.group('q')}data:{mime};base64,{data}"
 
 
-html = SRC.read_text(encoding="utf-8")
-html = html.replace(
-    "<!-- Fonte do site. Rode `python3 build.py` para gerar barbearia-machado.html (arquivo único, com as imagens embutidas). -->",
-    "<!-- Gerado por build.py — edite index.html e rode o build de novo. -->",
-)
-OUT.write_text(REF.sub(inline, html), encoding="utf-8")
-print(f"{OUT.name}: {OUT.stat().st_size / 1024:.0f} KB")
+for src, out in PAGES.items():
+    html = (ROOT / src).read_text(encoding="utf-8")
+    html = SOURCE_NOTE.sub(f"<!-- Gerado por build.py — edite {src} e rode o build de novo. -->", html)
+    target = ROOT / out
+    target.write_text(REF.sub(inline, html), encoding="utf-8")
+    print(f"{out}: {target.stat().st_size / 1024:.0f} KB")

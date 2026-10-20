@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CamHub — Suas câmeras numa tela só</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/hls.min.js" defer></script>
+<script src="/js/player.js" defer></script>
+<script src="/js/app.js" defer></script>
+</head>
+<body>
+
+<section id="auth" class="auth" hidden>
+  <div class="card auth-card">
+    <h1 class="brand">Cam<span>Hub</span></h1>
+    <p class="muted">Todas as suas câmeras, de qualquer marca, num lugar só.</p>
+    <div class="tabs">
+      <button type="button" data-auth-tab="login" class="active">Entrar</button>
+      <button type="button" data-auth-tab="register">Criar conta</button>
+    </div>
+    <form id="auth-form">
+      <label data-register-only hidden>Nome<input name="name" autocomplete="name"></label>
+      <label>E-mail<input name="email" type="email" autocomplete="email" required></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+      <button class="primary" type="submit">Entrar</button>
+      <p class="error" id="auth-error"></p>
+    </form>
+  </div>
+</section>
+
+<div id="app" hidden>
+  <header class="top">
+    <span class="brand">Cam<span>Hub</span></span>
+    <nav>
+      <button type="button" data-view="mosaic" class="active">Mosaico</button>
+      <button type="button" data-view="cameras">Câmeras</button>
+      <button type="button" data-view="playback">Gravações</button>
+      <button type="button" data-view="groups">Grupos</button>
+    </nav>
+    <span class="user"><span id="user-name"></span> <button type="button" id="logout" class="link">Sair</button></span>
+  </header>
+
+  <main>
+    <section data-panel="mosaic">
+      <div class="toolbar">
+        <label>Exibir
+          <select id="mosaic-filter"><option value="">Todas as câmeras</option></select>
+        </label>
+        <label>Layout
+          <select id="mosaic-layout">
+            <option value="1">1</option><option value="4" selected>2×2</option>
+            <option value="9">3×3</option><option value="16">4×4</option>
+          </select>
+        </label>
+        <label>Rodízio
+          <select id="mosaic-rotate">
+            <option value="0">Desligado</option><option value="15">15 s</option>
+            <option value="30">30 s</option><option value="60">1 min</option>
+          </select>
+        </label>
+        <span class="muted" id="mosaic-page"></span>
+      </div>
+      <div id="mosaic" class="mosaic"></div>
+    </section>
+
+    <section data-panel="cameras" hidden>
+      <div class="toolbar">
+        <h2>Minhas câmeras e compartilhadas comigo</h2>
+        <button type="button" class="primary" id="add-camera">+ Adicionar câmera</button>
+      </div>
+      <div id="camera-list" class="list"></div>
+    </section>
+
+    <section data-panel="playback" hidden>
+      <div class="toolbar">
+        <label>Câmera<select id="pb-camera"></select></label>
+        <label>Dia<input type="date" id="pb-date"></label>
+        <label>Velocidade
+          <select id="pb-speed">
+            <option>1</option><option>2</option><option>4</option><option>8</option>
+          </select>
+        </label>
+      </div>
+      <div class="timeline" id="pb-timeline" title="Clique para assistir a partir desse horário"></div>
+      <div class="timeline-hours"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>
+      <p class="muted" id="pb-info">Escolha a câmera e o dia; clique na faixa verde para assistir.</p>
+      <div class="player-wrap"><video id="pb-video" controls playsinline muted></video></div>
+    </section>
+
+    <section data-panel="groups" hidden>
+      <div class="toolbar">
+        <h2>Grupos de compartilhamento</h2>
+        <form id="group-form" class="inline">
+          <input name="name" placeholder="Ex.: Rua das Palmeiras" required maxlength="80">
+          <button class="primary" type="submit">Criar grupo</button>
+        </form>
+      </div>
+      <p class="muted">Cada pessoa decide quais das próprias câmeras entram no grupo. Ninguém vê a câmera de outra casa sem essa autorização.</p>
+      <div id="group-list" class="list"></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="camera-dialog">
+  <form id="camera-form" method="dialog">
+    <h2 id="camera-dialog-title">Adicionar câmera</h2>
+    <label>Nome<input name="name" required maxlength="80" placeholder="Portão da frente"></label>
+    <label>Marca / tipo<select name="brand" id="brand-select"></select></label>
+    <div data-template-fields class="row">
+      <label class="grow">IP ou domínio<input name="host" placeholder="192.168.0.10 ou meudvr.ddns.net"></label>
+      <label>Porta<input name="port" type="number" min="1" max="65535"></label>
+      <label>Canal<input name="channel" type="number" min="1" max="256" value="1"></label>
+      <label>Qualidade
+        <select name="stream"><option value="0">Principal</option><option value="1">Secundária (leve)</option></select>
+      </label>
+    </div>
+    <label data-url-field hidden>URL do stream<input name="url" placeholder="rtsp://192.168.0.10:554/stream1"></label>
+    <p class="muted small" id="current-url" hidden></p>
+    <div class="row">
+      <label class="grow">Usuário<input name="username" autocomplete="off"></label>
+      <label class="grow">Senha<input name="password" type="password" autocomplete="new-password"></label>
+    </div>
+    <label>Local (opcional)<input name="location" maxlength="200" placeholder="Rua, bloco, ponto de referência"></label>
+    <div class="row checks">
+      <label><input type="checkbox" name="record" checked> Gravar</label>
+      <label>Dias de gravação<input name="retentionDays" type="number" min="1" max="90" value="7"></label>
+      <label><input type="checkbox" name="audio"> Áudio</label>
+      <label><input type="checkbox" name="transcode"> Converter para H.264</label>
+      <label><input type="checkbox" name="enabled" checked> Ativa</label>
+    </div>
+    <p class="muted small">"Converter para H.264" é necessário em câmeras H.265 (o navegador não toca H.265). Usa mais CPU do servidor.</p>
+    <p id="test-result" class="small"></p>
+    <div class="actions">
+      <button type="button" id="test-camera">Testar conexão</button>
+      <span class="grow"></span>
+      <button type="button" value="cancel" id="camera-cancel">Cancelar</button>
+      <button type="submit" class="primary">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="share-dialog">
+  <div class="share-body">
+    <h2>Compartilhar <span id="share-camera-name"></span></h2>
+    <h3>Com pessoas cadastradas</h3>
+    <form id="share-form" class="inline">
+      <input name="email" type="email" placeholder="e-mail da pessoa" required>
+      <label><input type="checkbox" name="canPlayback"> pode ver gravações</label>
+      <button class="primary" type="submit">Compartilhar</button>
+    </form>
+    <div id="share-list" class="list compact"></div>
+    <h3>Link temporário (sem precisar de conta)</h3>
+    <form id="link-form">
+      <div class="row">
+        <label>Tipo
+          <select name="kind"><option value="live">Ao vivo</option><option value="recording">Trecho gravado</option></select>
+        </label>
+        <label data-rec-only hidden>De<input name="from" type="datetime-local"></label>
+        <label data-rec-only hidden>Até<input name="to" type="datetime-local"></label>
+      </div>
+      <div class="row">
+        <label>Validade (horas)<input name="hours" type="number" min="1" max="720" value="24"></label>
+        <label>Limite de acessos<input name="maxViews" type="number" min="1" placeholder="sem limite"></label>
+        <label class="grow">Senha (opcional)<input name="password" type="password" autocomplete="new-password"></label>
+      </div>
+      <button class="primary" type="submit">Gerar link</button>
+    </form>
+    <p id="link-result" class="small"></p>
+    <div id="link-list" class="list compact"></div>
+    <div class="actions"><span class="grow"></span><button type="button" id="share-close">Fechar</button></div>
+  </div>
+</dialog>
+
+</body>
+</html>

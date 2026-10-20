@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Câmera compartilhada — CamHub</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/hls.min.js" defer></script>
+<script src="/js/player.js" defer></script>
+<script src="/js/share.js" defer></script>
+</head>
+<body>
+<main class="share-page">
+  <h1 class="brand">Cam<span>Hub</span></h1>
+  <form id="pass-form" class="card" hidden>
+    <p>Este link é protegido por senha.</p>
+    <input name="password" type="password" placeholder="Senha" required autocomplete="off">
+    <button class="primary" type="submit">Abrir</button>
+  </form>
+  <p id="share-msg" class="muted">Abrindo…</p>
+  <h2 id="share-title"></h2>
+  <div class="player-wrap" hidden id="share-player"><video id="share-video" controls playsinline muted></video></div>
+</main>
+</body>
+</html>

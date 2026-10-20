@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu Bairro Seguro</title>
+<script src="/js/theme.js"></script>
+<link rel="stylesheet" href="/vendor/leaflet.css">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/hls.min.js" defer></script>
+<script src="/vendor/leaflet.js" defer></script>
+<script src="/vendor/jsQR.js" defer></script>
+<script src="/js/qr-parse.js" defer></script>
+<script src="/js/player.js" defer></script>
+<script src="/js/core.js" defer></script>
+<script src="/js/map.js" defer></script>
+<script src="/js/mosaic.js" defer></script>
+<script src="/js/cameras.js" defer></script>
+<script src="/js/people.js" defer></script>
+<script src="/js/app.js" defer></script>
+</head>
+<body>
+
+<section id="auth" class="auth" hidden>
+  <div class="card auth-card">
+    <div class="logo"><span class="logo-mark">🏘️</span><h1 class="brand">Meu Bairro <span>Seguro</span></h1></div>
+    <p class="muted" id="auth-intro">Entre com o login e a senha que o administrador criou para você.</p>
+    <form id="auth-form">
+      <label data-setup-only hidden>Seu nome<input name="name" autocomplete="name"></label>
+      <label>Login<input name="login" autocomplete="username" required autocapitalize="none"></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+      <button class="primary" type="submit" id="auth-submit">Entrar</button>
+      <p class="error" id="auth-error"></p>
+    </form>
+  </div>
+</section>
+
+<div id="app" hidden>
+  <header class="top">
+    <span class="brand"><span class="logo-mark small">🏘️</span> Meu Bairro <span>Seguro</span></span>
+    <nav>
+      <button type="button" data-view="map" class="active">🗺️ Mapa</button>
+      <button type="button" data-view="mosaic">▦ Mosaico</button>
+      <button type="button" data-view="cameras">📹 Câmeras</button>
+      <button type="button" data-view="playback">⏪ Gravações</button>
+      <button type="button" data-view="groups">👥 Grupos</button>
+      <button type="button" data-view="people" data-admin-only hidden>🔑 Pessoas</button>
+    </nav>
+    <span class="user">
+      <button type="button" id="theme-toggle" class="ghost" title="Trocar tema"></button>
+      <span id="user-name"></span>
+      <button type="button" id="my-password" class="link">Minha senha</button>
+      <button type="button" id="logout" class="link">Sair</button>
+    </span>
+  </header>
+
+  <main>
+    <section data-panel="map" class="map-panel">
+      <div id="map"></div>
+      <div class="map-side card" id="map-side">
+        <div class="map-side-head">
+          <strong>Câmeras</strong>
+          <span class="muted small" id="map-count"></span>
+          <button type="button" class="primary small-btn" data-can-add hidden id="map-add">+ Adicionar</button>
+        </div>
+        <div id="map-list" class="list compact"></div>
+      </div>
+    </section>
+
+    <section data-panel="mosaic" hidden>
+      <div class="toolbar">
+        <label>Exibir<select id="mosaic-filter"><option value="">Todas as câmeras</option></select></label>
+        <label>Layout
+          <select id="mosaic-layout">
+            <option value="1">1</option><option value="4" selected>2×2</option>
+            <option value="9">3×3</option><option value="16">4×4</option>
+          </select>
+        </label>
+        <label>Rodízio
+          <select id="mosaic-rotate">
+            <option value="0">Desligado</option><option value="15">15 s</option>
+            <option value="30">30 s</option><option value="60">1 min</option>
+          </select>
+        </label>
+        <span class="muted" id="mosaic-page"></span>
+      </div>
+      <div id="mosaic" class="mosaic"></div>
+    </section>
+
+    <section data-panel="cameras" hidden>
+      <div class="toolbar">
+        <h2>Câmeras</h2>
+        <button type="button" class="primary" id="add-camera" data-can-add hidden>+ Adicionar câmera</button>
+      </div>
+      <div id="camera-list" class="list"></div>
+    </section>
+
+    <section data-panel="playback" hidden>
+      <div class="toolbar">
+        <label>Câmera<select id="pb-camera"></select></label>
+        <label>Dia<input type="date" id="pb-date"></label>
+        <label>Velocidade
+          <select id="pb-speed"><option>1</option><option>2</option><option>4</option><option>8</option></select>
+        </label>
+      </div>
+      <div class="timeline" id="pb-timeline" title="Clique para assistir a partir desse horário"></div>
+      <div class="timeline-hours"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>
+      <p class="muted" id="pb-info">Escolha a câmera e o dia; clique na faixa verde para assistir.</p>
+      <div class="player-wrap"><video id="pb-video" controls playsinline muted></video></div>
+    </section>
+
+    <section data-panel="groups" hidden>
+      <div class="toolbar">
+        <h2>Grupos de vizinhança</h2>
+        <form id="group-form" class="inline">
+          <input name="name" placeholder="Ex.: Rua das Palmeiras" required maxlength="80">
+          <button class="primary" type="submit">Criar grupo</button>
+        </form>
+      </div>
+      <p class="muted">Cada pessoa decide quais das próprias câmeras entram no grupo. Ninguém vê a câmera de outra casa sem essa autorização.</p>
+      <div id="group-list" class="list"></div>
+    </section>
+
+    <section data-panel="people" hidden>
+      <div class="toolbar"><h2>Pessoas e acessos</h2></div>
+      <form id="user-form" class="card user-form">
+        <strong>Criar acesso</strong>
+        <div class="row">
+          <label class="grow">Nome<input name="name" required maxlength="80" placeholder="Maria da Silva"></label>
+          <label class="grow">Login<input name="login" required maxlength="60" autocapitalize="none" placeholder="maria.silva"></label>
+          <label class="grow">Senha inicial<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+        </div>
+        <div class="row checks">
+          <label><input type="checkbox" name="canAddCameras" checked> Pode cadastrar câmeras próprias</label>
+          <label><input type="checkbox" name="isAdmin"> Administrador (vê e gerencia tudo)</label>
+          <span class="grow"></span>
+          <button class="primary" type="submit">Criar acesso</button>
+        </div>
+        <p class="error small" id="user-form-error"></p>
+      </form>
+      <div id="user-list" class="list"></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="camera-dialog">
+  <form id="camera-form" method="dialog">
+    <h2 id="camera-dialog-title">Adicionar câmera</h2>
+
+    <div class="quick" id="quick-add">
+      <button type="button" id="qr-start">📷 Ler QR da câmera</button>
+      <button type="button" id="code-start">⌨️ Digitar código</button>
+      <button type="button" id="discover-start">🔎 Procurar na rede</button>
+    </div>
+    <div id="qr-panel" class="qr-panel" hidden>
+      <video id="qr-video" playsinline muted></video>
+      <p class="muted small">Aponte para o QR na etiqueta da câmera ou na caixa.</p>
+      <button type="button" id="qr-stop">Parar</button>
+    </div>
+    <div id="code-panel" class="inline-row" hidden>
+      <input id="code-input" placeholder="Número de série ou código da etiqueta (ex.: 7F0ABC123)">
+      <button type="button" class="primary" id="code-use">Usar código</button>
+    </div>
+    <div id="discover-panel" hidden>
+      <p class="muted small" id="discover-msg"></p>
+      <div id="discover-list" class="list compact"></div>
+    </div>
+    <p id="quick-msg" class="small"></p>
+
+    <label>Nome<input name="name" required maxlength="80" placeholder="Portão da frente"></label>
+    <label>Marca / tipo<select name="brand" id="brand-select"></select></label>
+    <div data-template-fields class="row">
+      <label class="grow">IP ou domínio<input name="host" placeholder="192.168.0.10 ou meudvr.ddns.net"></label>
+      <label>Porta<input name="port" type="number" min="1" max="65535"></label>
+      <label data-channel>Canal<input name="channel" type="number" min="1" max="256" value="1"></label>
+      <label>Qualidade
+        <select name="stream"><option value="0">Principal</option><option value="1">Secundária (leve)</option></select>
+      </label>
+    </div>
+    <label data-url-field hidden>URL do stream<input name="url" placeholder="rtsp://192.168.0.10:554/stream1"></label>
+    <p class="muted small" id="current-url" hidden></p>
+    <div class="row">
+      <label class="grow">Usuário<input name="username" autocomplete="off" placeholder="admin"></label>
+      <label class="grow">Senha<input name="password" type="password" autocomplete="new-password"></label>
+      <label class="grow">Nº de série<input name="serial" maxlength="64" autocomplete="off"></label>
+    </div>
+
+    <fieldset class="where">
+      <legend>Onde fica a câmera (aparece no mapa)</legend>
+      <div id="pick-map" class="pick-map"></div>
+      <div class="row">
+        <label class="grow">Endereço / referência<input name="location" maxlength="200" placeholder="Rua das Palmeiras, 45"></label>
+        <button type="button" id="use-my-location">📍 Usar minha localização</button>
+        <button type="button" id="clear-location" class="ghost">Tirar do mapa</button>
+      </div>
+      <input type="hidden" name="lat"><input type="hidden" name="lng">
+      <p class="muted small" id="pick-hint">Clique no mapa para marcar o local da câmera.</p>
+    </fieldset>
+
+    <div class="row checks">
+      <label><input type="checkbox" name="record" checked> Gravar</label>
+      <label>Dias de gravação<input name="retentionDays" type="number" min="1" max="90" value="7"></label>
+      <label><input type="checkbox" name="audio"> Áudio</label>
+      <label><input type="checkbox" name="transcode"> Converter para H.264</label>
+      <label><input type="checkbox" name="enabled" checked> Ativa</label>
+    </div>
+    <p class="muted small">"Converter para H.264" é necessário em câmeras H.265 (o navegador não toca H.265). Usa mais CPU do servidor.</p>
+    <p id="test-result" class="small"></p>
+    <div class="actions">
+      <button type="button" id="test-camera">Testar conexão</button>
+      <span class="grow"></span>
+      <button type="button" id="camera-cancel">Cancelar</button>
+      <button type="submit" class="primary">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="viewer-dialog" class="wide">
+  <div class="viewer-head"><strong id="viewer-title"></strong><span class="grow"></span><button type="button" id="viewer-close">Fechar</button></div>
+  <div class="player-wrap"><video id="viewer-video" controls playsinline muted></video></div>
+</dialog>
+
+<dialog id="share-dialog">
+  <div class="share-body">
+    <h2>Compartilhar <span id="share-camera-name"></span></h2>
+    <h3>Com uma pessoa que tem acesso ao sistema</h3>
+    <form id="share-form" class="inline">
+      <input name="login" placeholder="login da pessoa" required autocapitalize="none">
+      <label><input type="checkbox" name="canPlayback"> pode ver gravações</label>
+      <button class="primary" type="submit">Compartilhar</button>
+    </form>
+    <div id="share-list" class="list compact"></div>
+    <h3>Link temporário (sem precisar de login)</h3>
+    <form id="link-form">
+      <div class="row">
+        <label>Tipo
+          <select name="kind"><option value="live">Ao vivo</option><option value="recording">Trecho gravado</option></select>
+        </label>
+        <label data-rec-only hidden>De<input name="from" type="datetime-local"></label>
+        <label data-rec-only hidden>Até<input name="to" type="datetime-local"></label>
+      </div>
+      <div class="row">
+        <label>Validade (horas)<input name="hours" type="number" min="1" max="720" value="24"></label>
+        <label>Limite de acessos<input name="maxViews" type="number" min="1" placeholder="sem limite"></label>
+        <label class="grow">Senha (opcional)<input name="password" type="password" autocomplete="new-password"></label>
+      </div>
+      <button class="primary" type="submit">Gerar link</button>
+    </form>
+    <p id="link-result" class="small"></p>
+    <div id="link-list" class="list compact"></div>
+    <div class="actions"><span class="grow"></span><button type="button" id="share-close">Fechar</button></div>
+  </div>
+</dialog>
+
+<dialog id="user-dialog">
+  <form id="user-edit-form">
+    <h2>Editar acesso</h2>
+    <label>Nome<input name="name" required maxlength="80"></label>
+    <p class="muted small">Login: <strong id="user-edit-login"></strong></p>
+    <label>Nova senha (deixe em branco para manter)<input name="password" type="password" minlength="8" autocomplete="new-password"></label>
+    <label><input type="checkbox" name="canAddCameras"> Pode cadastrar câmeras próprias</label>
+    <label><input type="checkbox" name="isAdmin"> Administrador</label>
+    <p class="error small" id="user-edit-error"></p>
+    <div class="actions"><span class="grow"></span><button type="button" id="user-edit-cancel">Cancelar</button><button class="primary" type="submit">Salvar</button></div>
+  </form>
+</dialog>
+
+<dialog id="access-dialog">
+  <form id="access-form">
+    <h2>Câmeras que <span id="access-name"></span> pode ver</h2>
+    <p class="muted small">Marque as câmeras liberadas para essa pessoa. As câmeras dela própria e as dos grupos dela já aparecem sempre.</p>
+    <div id="access-list" class="list compact access-list"></div>
+    <div class="actions">
+      <button type="button" id="access-all" class="ghost">Marcar todas</button>
+      <span class="grow"></span>
+      <button type="button" id="access-cancel">Cancelar</button>
+      <button class="primary" type="submit">Salvar acessos</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="password-dialog">
+  <form id="password-form">
+    <h2>Trocar minha senha</h2>
+    <label>Senha atual<input name="current" type="password" required autocomplete="current-password"></label>
+    <label>Nova senha<input name="next" type="password" required minlength="8" autocomplete="new-password"></label>
+    <p class="small" id="password-msg"></p>
+    <div class="actions"><span class="grow"></span><button type="button" id="password-cancel">Fechar</button><button class="primary" type="submit">Salvar</button></div>
+  </form>
+</dialog>
+
+</body>
+</html>

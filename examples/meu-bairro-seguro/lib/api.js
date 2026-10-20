@@ -6,18 +6,39 @@ const auth = require('./auth');
 const streams = require('./streams');
 const recordings = require('./recordings');
 const presets = require('./presets');
+const onvif = require('./onvif');
 const config = require('../config');
 const { visibleCameras, cameraAccess, requireOwner, publicCamera } = require('./access');
 const { HttpError, readJson, sendJson, sendText, str, int } = require('./http');
 
 const bool = (v, fallback = false) => (v === undefined ? fallback : v === true || v === 1 || v === '1');
 
-function cameraInput(body, existing) {
+function coord(value, field, limit) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || Math.abs(n) > limit) throw new HttpError(400, `Coordenada inválida: ${field}.`);
+  return n;
+}
+
+async function cameraInput(body, existing) {
   const brand = str(body.brand || 'generic', 'marca', { max: 40 });
   const preset = presets.PRESETS[brand];
   if (!preset) throw new HttpError(400, 'Marca desconhecida.');
+  const username = str(body.username, 'usuário', { max: 100, required: false });
+  const keepPassword = existing && !body.password && !body.clearPassword;
+  const password = keepPassword ? existing.password : str(body.password, 'senha', { max: 200, required: false });
   let url;
-  if (preset.template) {
+  let onvifUrl = existing ? existing.onvif_url : '';
+  if (preset.onvif) {
+    const host = str(body.host, 'endereço', { max: 253, required: !existing || !existing.onvif_url });
+    if (host) {
+      if (!/^[A-Za-z0-9.-]{1,253}$/.test(host)) throw new HttpError(400, 'Endereço (IP ou domínio) inválido.');
+      const port = int(body.port, 'porta', { min: 1, max: 65535, fallback: preset.port });
+      onvifUrl = `http://${host}:${port}/onvif/device_service`;
+    }
+    const stream = int(body.stream, 'stream', { min: 0, max: 1, fallback: 0 });
+    url = host || !existing ? await onvif.getStreamUri(onvifUrl, username, password, stream) : existing.url;
+  } else if (preset.template) {
     const host = str(body.host, 'endereço', { max: 253, required: !existing });
     url = host
       ? presets.resolveTemplate(brand, {
@@ -31,26 +52,37 @@ function cameraInput(body, existing) {
     const raw = str(body.url, 'URL', { max: 1000, required: !existing });
     url = raw ? presets.validateUrl(raw) : existing.url;
   }
-  const keepPassword = existing && !body.password && !body.clearPassword;
+  if (!preset.onvif) onvifUrl = '';
   return {
     name: str(body.name, 'nome', { max: 80 }),
     brand,
     url,
-    username: str(body.username, 'usuário', { max: 100, required: false }),
-    password: keepPassword ? existing.password : str(body.password, 'senha', { max: 200, required: false }),
+    username,
+    password,
     transcode: bool(body.transcode) ? 1 : 0,
     audio: bool(body.audio) ? 1 : 0,
     record: bool(body.record, true) ? 1 : 0,
     retention_days: int(body.retentionDays, 'dias de gravação', { min: 1, max: 90, fallback: config.defaultRetentionDays }),
     enabled: bool(body.enabled, true) ? 1 : 0,
     location: str(body.location, 'local', { max: 200, required: false }),
+    lat: coord(body.lat, 'latitude', 90),
+    lng: coord(body.lng, 'longitude', 180),
+    serial: str(body.serial, 'número de série', { max: 64, required: false }),
+    onvif_url: onvifUrl,
   };
 }
 
-function userByEmail(email) {
-  const user = db.one('SELECT id, name, email FROM users WHERE email = ?', String(email || '').trim().toLowerCase());
-  if (!user) throw new HttpError(404, 'Nenhum usuário com esse e-mail. Peça para a pessoa criar a conta primeiro.');
+const CAMERA_COLUMNS = ['name', 'brand', 'url', 'username', 'password', 'transcode', 'audio', 'record',
+  'retention_days', 'enabled', 'location', 'lat', 'lng', 'serial', 'onvif_url'];
+
+function userByLogin(login) {
+  const user = db.one('SELECT id, name, login FROM users WHERE login = ?', String(login || '').trim().toLowerCase());
+  if (!user) throw new HttpError(404, 'Nenhuma pessoa com esse login. O administrador cadastra os acessos em "Pessoas".');
   return user;
+}
+
+function requireCanAdd(user) {
+  if (!user.isAdmin && !user.canAddCameras) throw new HttpError(403, 'Seu acesso não permite cadastrar câmeras.');
 }
 
 const loadCamera = (id) => db.one('SELECT * FROM cameras WHERE id = ?', id);
@@ -62,12 +94,12 @@ async function listCameras(req, res, user) {
 }
 
 async function createCamera(req, res, user) {
-  const c = cameraInput(await readJson(req));
+  requireCanAdd(user);
+  const c = await cameraInput(await readJson(req));
   const info = db.run(
-    `INSERT INTO cameras (owner_id, name, brand, url, username, password, transcode, audio, record,
-       retention_days, enabled, location, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    user.id, c.name, c.brand, c.url, c.username, c.password, c.transcode, c.audio, c.record,
-    c.retention_days, c.enabled, c.location, Date.now(),
+    `INSERT INTO cameras (owner_id, ${CAMERA_COLUMNS.join(', ')}, created_at)
+     VALUES (?, ${CAMERA_COLUMNS.map(() => '?').join(', ')}, ?)`,
+    user.id, ...CAMERA_COLUMNS.map((k) => c[k]), Date.now(),
   );
   const cam = loadCamera(Number(info.lastInsertRowid));
   streams.start(cam);
@@ -76,13 +108,8 @@ async function createCamera(req, res, user) {
 
 async function updateCamera(req, res, user, id) {
   const existing = requireOwner(user, id);
-  const c = cameraInput(await readJson(req), existing);
-  db.run(
-    `UPDATE cameras SET name=?, brand=?, url=?, username=?, password=?, transcode=?, audio=?, record=?,
-       retention_days=?, enabled=?, location=? WHERE id=?`,
-    c.name, c.brand, c.url, c.username, c.password, c.transcode, c.audio, c.record,
-    c.retention_days, c.enabled, c.location, id,
-  );
+  const c = await cameraInput(await readJson(req), existing);
+  db.run(`UPDATE cameras SET ${CAMERA_COLUMNS.map((k) => `${k}=?`).join(', ')} WHERE id=?`, ...CAMERA_COLUMNS.map((k) => c[k]), id);
   const cam = loadCamera(id);
   streams.start(cam);
   sendJson(res, 200, publicCamera({ ...cam, via: existing.via, can_playback: 1 }, streams.status(id)));
@@ -100,8 +127,31 @@ async function testCamera(req, res, user) {
   const body = await readJson(req);
   let existing;
   if (body.id) existing = requireOwner(user, int(body.id, 'id', { min: 1 }));
-  const c = cameraInput({ name: 'teste', ...body }, existing);
-  sendJson(res, 200, await streams.probe(c));
+  else requireCanAdd(user);
+  let c;
+  try {
+    c = await cameraInput({ name: 'teste', ...body }, existing);
+  } catch (err) {
+    if (err instanceof HttpError && err.status !== 400) return sendJson(res, 200, { ok: false, error: err.message });
+    throw err;
+  }
+  sendJson(res, 200, { ...(await streams.probe(c)), url: presets.maskUrl(c.url) });
+}
+
+// ------------------------------------------------------------------ ONVIF / QR helpers
+
+async function discoverCameras(req, res, user) {
+  requireCanAdd(user);
+  sendJson(res, 200, await onvif.discover());
+}
+
+async function findBySerial(req, res, user) {
+  requireCanAdd(user);
+  const body = await readJson(req);
+  const serial = str(body.serial, 'número de série', { max: 64 });
+  const username = str(body.username, 'usuário', { max: 100, required: false }) || 'admin';
+  const password = str(body.password, 'senha', { max: 200, required: false });
+  sendJson(res, 200, await onvif.findBySerial(serial, username, password));
 }
 
 async function snapshot(req, res, user, id) {
@@ -143,7 +193,7 @@ async function playback(req, res, user, id, query) {
 async function listShares(req, res, user, id) {
   requireOwner(user, id);
   sendJson(res, 200, db.all(
-    `SELECT u.id, u.name, u.email, s.can_playback AS canPlayback FROM camera_shares s
+    `SELECT u.id, u.name, u.login, s.can_playback AS canPlayback FROM camera_shares s
      JOIN users u ON u.id = s.user_id WHERE s.camera_id = ? ORDER BY u.name`, id,
   ));
 }
@@ -151,7 +201,7 @@ async function listShares(req, res, user, id) {
 async function addShare(req, res, user, id) {
   requireOwner(user, id);
   const body = await readJson(req);
-  const target = userByEmail(body.email);
+  const target = userByLogin(body.login);
   if (target.id === user.id) throw new HttpError(400, 'Você já é dono desta câmera.');
   db.run(
     `INSERT INTO camera_shares (camera_id, user_id, can_playback) VALUES (?,?,?)
@@ -187,7 +237,7 @@ async function listGroups(req, res, user) {
     isOwner: g.owner_id === user.id,
     owner: db.one('SELECT id, name FROM users WHERE id = ?', g.owner_id),
     members: db.all(
-      'SELECT u.id, u.name, u.email FROM group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name', g.id,
+      'SELECT u.id, u.name, u.login FROM group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name', g.id,
     ),
     cameras: db.all(
       `SELECT c.id, c.name, c.owner_id AS ownerId, u.name AS ownerName, gc.can_playback AS canPlayback
@@ -211,7 +261,7 @@ async function deleteGroup(req, res, user, groupId) {
 
 async function addMember(req, res, user, groupId) {
   if (!loadGroup(user, groupId).isOwner) throw new HttpError(403, 'Só o administrador do grupo adiciona pessoas.');
-  const target = userByEmail((await readJson(req)).email);
+  const target = userByLogin((await readJson(req)).login);
   db.run('INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)', groupId, target.id);
   sendJson(res, 201, { ok: true });
 }
@@ -298,6 +348,7 @@ async function deleteLink(req, res, user, linkId) {
 
 module.exports = {
   listCameras, createCamera, updateCamera, deleteCamera, testCamera, snapshot, recordingRanges, playback,
+  discoverCameras, findBySerial,
   listShares, addShare, removeShare,
   listGroups, createGroup, deleteGroup, addMember, removeMember, addGroupCamera, removeGroupCamera,
   listLinks, createLink, deleteLink,

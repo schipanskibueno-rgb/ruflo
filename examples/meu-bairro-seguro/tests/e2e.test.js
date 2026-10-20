@@ -10,9 +10,9 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'camhub-test-'));
-process.env.CAMHUB_DATA_DIR = DATA;
-process.env.CAMHUB_RECORD_SEGMENT_SECONDS = '2';
+const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'mbs-test-'));
+process.env.MBS_DATA_DIR = DATA;
+process.env.MBS_RECORD_SEGMENT_SECONDS = '2';
 
 const db = require('../lib/db');
 const streams = require('../lib/streams');
@@ -69,11 +69,25 @@ test('fluxo completo de cadastro, ao vivo, gravação e compartilhamento', { tim
   const alice = client();
   const bob = client();
   const carol = client();
-  assert.equal((await alice('POST', '/api/auth/register', { name: 'Alice', email: 'alice@x.com', password: 'senha-forte-1' })).status, 201);
-  assert.equal((await bob('POST', '/api/auth/register', { name: 'Bob', email: 'bob@x.com', password: 'senha-forte-2' })).status, 201);
-  assert.equal((await carol('POST', '/api/auth/register', { name: 'Carol', email: 'carol@x.com', password: 'senha-forte-3' })).status, 201);
-  assert.equal((await alice('GET', '/api/me')).data.isAdmin, true, 'primeira conta é admin');
-  assert.equal((await bob('GET', '/api/me')).data.isAdmin, false);
+  assert.equal((await alice('GET', '/api/setup')).data.needsSetup, true);
+  assert.equal((await alice('POST', '/api/auth/setup', { name: 'Alice', login: 'alice', password: 'senha-forte-1' })).status, 201);
+  assert.equal((await bob('POST', '/api/auth/setup', { name: 'Intruso', login: 'intruso', password: 'senha-forte-9' })).status, 403,
+    'depois do primeiro administrador ninguém se cadastra sozinho');
+  assert.equal((await alice('GET', '/api/me')).data.isAdmin, true);
+
+  // The admin creates each person's own login and password.
+  const bobUser = await alice('POST', '/api/users', { name: 'Bob', login: 'Bob.Silva', password: 'senha-forte-2', canAddCameras: false });
+  assert.equal(bobUser.status, 201);
+  assert.equal(bobUser.data.login, 'bob.silva');
+  assert.equal((await alice('POST', '/api/users', { name: 'Carol', login: 'carol', password: 'senha-forte-3', canAddCameras: true })).status, 201);
+  assert.equal((await alice('POST', '/api/users', { name: 'Dup', login: 'carol', password: 'senha-forte-3' })).status, 409);
+  assert.equal((await bob('POST', '/api/users', { name: 'X', login: 'xx1', password: 'senha-forte-3' })).status, 401);
+  assert.equal((await bob('POST', '/api/auth/login', { login: 'bob.silva', password: 'errada-123' })).status, 401);
+  assert.equal((await bob('POST', '/api/auth/login', { login: 'bob.silva', password: 'senha-forte-2' })).status, 200);
+  assert.equal((await carol('POST', '/api/auth/login', { login: 'carol', password: 'senha-forte-3' })).status, 200);
+  assert.equal((await bob('GET', '/api/users')).status, 403, 'só admin vê a lista de pessoas');
+  assert.equal((await bob('POST', '/api/cameras', { name: 'x', brand: 'rtmp', url: 'rtmp://127.0.0.1/x' })).status, 403,
+    'Bob não tem permissão de cadastrar câmeras');
 
   // Connection test without saving.
   const probeUrl = fakeCamera(19401);
@@ -94,8 +108,12 @@ test('fluxo completo de cadastro, ao vivo, gravação e compartilhamento', { tim
   // Bad scheme is refused.
   assert.equal((await alice('POST', '/api/cameras', { name: 'x', brand: 'generic', url: 'file:///etc/passwd' })).status, 400);
 
-  const cam = await alice('POST', '/api/cameras', { name: 'Portão', brand: 'rtmp', url: fakeCamera(19402), retentionDays: 3 });
+  const cam = await alice('POST', '/api/cameras', {
+    name: 'Portão', brand: 'rtmp', url: fakeCamera(19402), retentionDays: 3, lat: -25.0918, lng: -50.1668, location: 'Rua A, 45',
+  });
   assert.equal(cam.status, 201);
+  assert.equal(cam.data.lat, -25.0918, 'posição no mapa salva');
+  assert.equal((await alice('POST', '/api/cameras', { name: 'x', brand: 'rtmp', url: 'rtmp://h/x', lat: 200 })).status, 400);
   const id = cam.data.id;
 
   let status;
@@ -116,15 +134,19 @@ test('fluxo completo de cadastro, ao vivo, gravação e compartilhamento', { tim
   assert.equal((await bob('GET', `/media/${id}/live/index.m3u8`)).status, 404);
   assert.equal((await bob('GET', '/api/cameras')).data.length, 0);
 
-  // Direct share, live only.
-  assert.equal((await alice('POST', `/api/cameras/${id}/shares`, { email: 'bob@x.com', canPlayback: false })).status, 201);
+  // Admin releases the camera to Bob, live only.
+  assert.equal((await alice('PUT', `/api/users/${bobUser.data.id}/access`, { cameras: [{ cameraId: id, canPlayback: false }] })).status, 200);
+  const bobAccess = (await alice('GET', `/api/users/${bobUser.data.id}/access`)).data.find((r) => r.id === id);
+  assert.equal(bobAccess.granted, true);
+  assert.equal(bobAccess.canPlayback, false);
   assert.equal((await bob('GET', `/media/${id}/live/index.m3u8`)).status, 200);
+  assert.equal((await alice('POST', `/api/cameras/${id}/shares`, { login: 'ninguem', canPlayback: false })).status, 404);
   assert.equal((await bob('PUT', `/api/cameras/${id}`, { name: 'hack', brand: 'rtmp' })).status, 403);
 
   // Group: Carol joins, Alice puts her camera in with recordings allowed.
   const group = await alice('POST', '/api/groups', { name: 'Rua das Palmeiras' });
   const gid = group.data.id;
-  assert.equal((await alice('POST', `/api/groups/${gid}/members`, { email: 'carol@x.com' })).status, 201);
+  assert.equal((await alice('POST', `/api/groups/${gid}/members`, { login: 'carol' })).status, 201);
   assert.equal((await carol('POST', `/api/groups/${gid}/cameras`, { cameraId: id })).status, 403, 'só o dono põe a câmera no grupo');
   assert.equal((await alice('POST', `/api/groups/${gid}/cameras`, { cameraId: id, canPlayback: true })).status, 201);
   const carolCams = (await carol('GET', '/api/cameras')).data;

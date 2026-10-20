@@ -7,18 +7,25 @@ const config = require('./config');
 const db = require('./lib/db');
 const auth = require('./lib/auth');
 const api = require('./lib/api');
+const users = require('./lib/users');
 const streams = require('./lib/streams');
 const recordings = require('./lib/recordings');
 const { cameraAccess } = require('./lib/access');
 const { HttpError, readJson, sendJson, sendText, sendFile, str } = require('./lib/http');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const HLS_DIR = path.dirname(require.resolve('hls.js/dist/hls.min.js'));
+// Browser libraries served from node_modules, so the system also works without internet.
+const VENDOR = {
+  'hls.min.js': require.resolve('hls.js/dist/hls.min.js'),
+  'leaflet.js': require.resolve('leaflet/dist/leaflet.js'),
+  'leaflet.css': require.resolve('leaflet/dist/leaflet.css'),
+  'jsQR.js': require.resolve('jsqr/dist/jsQR.js'),
+};
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://tile.openstreetmap.org",
   "media-src 'self' blob:",
   "worker-src 'self' blob:",
   "connect-src 'self'",
@@ -31,20 +38,19 @@ const clientIp = (req) => String(req.headers['x-forwarded-for'] || req.socket.re
 
 // ------------------------------------------------------------------ auth
 
-async function register(req, res) {
+// First access only: creates the administrator. After that, accounts are made in "Pessoas".
+async function setup(req, res) {
   const body = await readJson(req);
   const name = str(body.name, 'nome', { max: 80 });
-  const email = str(body.email, 'e-mail', { max: 200 }).toLowerCase();
-  const password = String(body.password || '');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'E-mail inválido.');
-  if (password.length < 8) throw new HttpError(400, 'A senha precisa ter pelo menos 8 caracteres.');
-  if (db.one('SELECT 1 FROM users WHERE email = ?', email)) throw new HttpError(409, 'Esse e-mail já tem conta.');
-  // The first account is the platform administrator (the monitoring central).
-  const isAdmin = db.one('SELECT COUNT(*) AS n FROM users').n === 0 ? 1 : 0;
-  const info = db.run(
-    'INSERT INTO users (name, email, pass_hash, is_admin, created_at) VALUES (?,?,?,?,?)',
-    name, email, auth.hashPassword(password), isAdmin, Date.now(),
-  );
+  const login = auth.normalizeLogin(body.login);
+  const password = auth.checkNewPassword(body.password);
+  const info = db.tx(() => {
+    if (db.one('SELECT COUNT(*) AS n FROM users').n > 0) throw new HttpError(403, 'O sistema já foi configurado. Peça um acesso ao administrador.');
+    return db.run(
+      'INSERT INTO users (name, login, pass_hash, is_admin, can_add_cameras, created_at) VALUES (?,?,?,1,1,?)',
+      name, login, auth.hashPassword(password), Date.now(),
+    );
+  });
   const token = auth.createSession(Number(info.lastInsertRowid));
   sendJson(res, 201, { ok: true }, { 'Set-Cookie': auth.sessionCookie(token) });
 }
@@ -53,10 +59,10 @@ async function login(req, res) {
   const ip = clientIp(req);
   auth.checkRate(ip);
   const body = await readJson(req);
-  const user = db.one('SELECT * FROM users WHERE email = ?', String(body.email || '').trim().toLowerCase());
+  const user = db.one('SELECT * FROM users WHERE login = ?', String(body.login || '').trim().toLowerCase());
   if (!user || !auth.verifyPassword(String(body.password || ''), user.pass_hash)) {
     auth.recordFailure(ip);
-    throw new HttpError(401, 'E-mail ou senha incorretos.');
+    throw new HttpError(401, 'Login ou senha incorretos.');
   }
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': auth.sessionCookie(auth.createSession(user.id)) });
 }
@@ -150,10 +156,20 @@ function serveViewer(res, key, rest) {
 
 const ID = '(\\d+)';
 const routes = [
-  ['POST', '/api/auth/register', (req, res) => register(req, res)],
+  ['GET', '/api/setup', (req, res) => sendJson(res, 200, { needsSetup: db.one('SELECT COUNT(*) AS n FROM users').n === 0 })],
+  ['POST', '/api/auth/setup', (req, res) => setup(req, res)],
   ['POST', '/api/auth/login', (req, res) => login(req, res)],
   ['POST', '/api/auth/logout', (req, res) => logout(req, res)],
   ['GET', '/api/me', (req, res, u) => sendJson(res, 200, u), true],
+  ['POST', '/api/me/password', users.changeOwnPassword, true],
+  ['GET', '/api/users', users.list, 'admin'],
+  ['POST', '/api/users', users.create, 'admin'],
+  ['PUT', `/api/users/${ID}`, users.update, 'admin'],
+  ['DELETE', `/api/users/${ID}`, users.remove, 'admin'],
+  ['GET', `/api/users/${ID}/access`, users.getAccess, 'admin'],
+  ['PUT', `/api/users/${ID}/access`, users.setAccess, 'admin'],
+  ['GET', '/api/onvif/discover', api.discoverCameras, true],
+  ['POST', '/api/onvif/find', api.findBySerial, true],
   ['GET', '/api/presets', (req, res) => sendJson(res, 200, require('./lib/presets').listPresets()), true],
   ['GET', '/api/cameras', api.listCameras, true],
   ['POST', '/api/cameras', api.createCamera, true],
@@ -191,7 +207,8 @@ function serveStatic(req, res, pathname) {
   for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
   if (page) return sendFile(res, PUBLIC_DIR, page);
   if (/^\/(css|js)\/[\w.-]+$/.test(pathname)) return sendFile(res, PUBLIC_DIR, pathname.slice(1), 'public, max-age=300');
-  if (pathname === '/vendor/hls.min.js') return sendFile(res, HLS_DIR, 'hls.min.js', 'public, max-age=86400');
+  const vendor = pathname.startsWith('/vendor/') && VENDOR[pathname.slice(8)];
+  if (vendor) return sendFile(res, path.dirname(vendor), path.basename(vendor), 'public, max-age=86400');
   throw new HttpError(404, 'Página não encontrada.');
 }
 
@@ -209,7 +226,7 @@ async function handle(req, res) {
     if (!m) continue;
     const params = m.slice(1).map((p) => (/^\d+$/.test(p) ? Number(p) : p));
     if (!r.needsUser) return r.handler(req, res, ...params);
-    const user = auth.requireUser(req);
+    const user = r.needsUser === 'admin' ? auth.requireAdmin(req) : auth.requireUser(req);
     // Logged-in handlers get (req, res, user, ...params, query).
     return r.handler(req, res, user, ...params, url.searchParams);
   }
@@ -246,7 +263,7 @@ if (require.main === module) {
   pruneAll();
   setInterval(pruneAll, 10 * 60e3).unref();
   const server = createServer().listen(config.port, () => {
-    console.log(`CamHub rodando em http://localhost:${config.port}`);
+    console.log(`Meu Bairro Seguro rodando em http://localhost:${config.port}`);
   });
   for (const sig of ['SIGINT', 'SIGTERM']) {
     process.on(sig, () => {

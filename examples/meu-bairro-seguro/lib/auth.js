@@ -5,7 +5,7 @@ const db = require('./db');
 const config = require('../config');
 const { HttpError, parseCookies } = require('./http');
 
-const COOKIE = 'camhub_session';
+const COOKIE = 'mbs_session';
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16);
@@ -41,18 +41,45 @@ function currentUser(req) {
   const token = parseCookies(req)[COOKIE];
   if (!token) return null;
   const row = db.one(
-    `SELECT u.id, u.name, u.email, u.is_admin, s.expires_at FROM sessions s
+    `SELECT u.id, u.name, u.login, u.is_admin, u.can_add_cameras, s.expires_at FROM sessions s
      JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`,
     sha256(token),
   );
   if (!row || row.expires_at < Date.now()) return null;
-  return { id: row.id, name: row.name, email: row.email, isAdmin: !!row.is_admin };
+  return {
+    id: row.id,
+    name: row.name,
+    login: row.login,
+    isAdmin: !!row.is_admin,
+    canAddCameras: !!row.is_admin || !!row.can_add_cameras,
+  };
 }
 
 function requireUser(req) {
   const user = currentUser(req);
   if (!user) throw new HttpError(401, 'Faça login para continuar.');
   return user;
+}
+
+function requireAdmin(req) {
+  const user = requireUser(req);
+  if (!user.isAdmin) throw new HttpError(403, 'Só o administrador pode fazer isso.');
+  return user;
+}
+
+// Login names: lowercase letters, digits, dot, dash, underscore, @ (an e-mail also works).
+function normalizeLogin(value) {
+  const login = String(value || '').trim().toLowerCase();
+  if (!/^[a-z0-9._@-]{3,60}$/.test(login)) {
+    throw new HttpError(400, 'Login inválido: use de 3 a 60 letras, números, ponto, traço ou @.');
+  }
+  return login;
+}
+
+function checkNewPassword(password) {
+  if (String(password || '').length < 8) throw new HttpError(400, 'A senha precisa ter pelo menos 8 caracteres.');
+  if (String(password).length > 200) throw new HttpError(400, 'Senha muito longa.');
+  return String(password);
 }
 
 function destroySession(req) {
@@ -85,6 +112,9 @@ module.exports = {
   sessionCookie,
   currentUser,
   requireUser,
+  requireAdmin,
+  normalizeLogin,
+  checkNewPassword,
   destroySession,
   checkRate,
   recordFailure,

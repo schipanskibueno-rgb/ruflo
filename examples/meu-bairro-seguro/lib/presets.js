@@ -7,6 +7,7 @@ const { HttpError } = require('./http');
 const config = require('../config');
 
 const PRESETS = {
+  onvif: { label: 'Automático (ONVIF) — funciona na maioria das marcas', port: 80, template: null, onvif: true },
   generic: { label: 'Outra / URL manual', port: 554, template: null },
   hikvision: {
     label: 'Hikvision / HiLook',
@@ -42,7 +43,13 @@ const PRESETS = {
 };
 
 function listPresets() {
-  return Object.entries(PRESETS).map(([id, p]) => ({ id, label: p.label, port: p.port, manual: !p.template }));
+  return Object.entries(PRESETS).map(([id, p]) => ({
+    id,
+    label: p.label,
+    port: p.port,
+    onvif: !!p.onvif,
+    manual: !p.template && !p.onvif,
+  }));
 }
 
 // Turns brand + host/port/channel into a URL template. {user}/{pass} stay as placeholders and

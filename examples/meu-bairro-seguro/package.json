@@ -1,8 +1,8 @@
 {
-  "name": "camhub",
+  "name": "meu-bairro-seguro",
   "version": "0.1.0",
   "private": true,
-  "description": "Central única de câmeras: cadastre câmeras IP, DVR e NVR de qualquer marca, veja ao vivo, grave e compartilhe com outras pessoas.",
+  "description": "Meu Bairro Seguro: câmeras de qualquer marca num mapa, com acesso individual por pessoa, gravação e compartilhamento.",
   "main": "server.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
@@ -12,6 +12,8 @@
     "node": ">=22.13"
   },
   "dependencies": {
-    "hls.js": "1.5.17"
+    "hls.js": "1.5.17",
+    "jsqr": "1.4.0",
+    "leaflet": "1.9.4"
   }
 }

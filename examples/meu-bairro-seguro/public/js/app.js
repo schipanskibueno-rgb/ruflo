@@ -8,8 +8,17 @@ async function showAuth() {
   stopPlayers();
   $('#app').hidden = true;
   $('#auth').hidden = false;
-  const { needsSetup } = await fetch('/api/setup').then((r) => r.json()).catch(() => ({ needsSetup: false }));
-  setupMode = needsSetup;
+  // When the page is hosted alone (e.g. Netlify) without the server behind it, say so plainly.
+  const setup = await fetch('/api/setup')
+    .then((r) => (r.ok && (r.headers.get('content-type') || '').includes('json') ? r.json() : null))
+    .catch(() => null);
+  $('#auth-form').hidden = !setup;
+  if (!setup) {
+    $('#auth-intro').textContent = 'Não consegui falar com o servidor do Meu Bairro Seguro. ' +
+      'Esta página precisa do servidor rodando (é ele que conecta as câmeras). Confira o endereço do servidor no arquivo _redirects.';
+    return;
+  }
+  setupMode = setup.needsSetup;
   $('[data-setup-only]').hidden = !setupMode;
   $('#auth-form').name.required = setupMode;
   $('#auth-submit').textContent = setupMode ? 'Criar administrador' : 'Entrar';

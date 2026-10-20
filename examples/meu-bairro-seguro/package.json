@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.js"
+    "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.js",
+    "build:netlify": "node tools/build-netlify.js"
   },
   "engines": {
     "node": ">=22.13"

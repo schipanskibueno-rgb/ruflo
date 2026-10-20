@@ -26,6 +26,26 @@ Variáveis de ambiente: `PORT`, `MBS_DATA_DIR` (banco + gravações, padrão `./
 > `localhost`) — é regra dos navegadores. Em produção, coloque um proxy com HTTPS na frente
 > (Caddy, Nginx + Let's Encrypt).
 
+## Publicar no Netlify
+
+O Netlify hospeda só as páginas. O **servidor** (este `npm start`) precisa rodar em outro lugar,
+porque é ele que conecta as câmeras, grava e guarda os logins: uma VPS, ou um mini-PC na rede
+das câmeras com um túnel HTTPS (ex.: Cloudflare Tunnel). O Netlify repassa para ele as chamadas
+`/api`, `/media` e `/v`, então tudo fica no mesmo endereço do site.
+
+```bash
+npm run build:netlify -- https://camera.seudominio.com.br   # endereço HTTPS do servidor
+```
+
+Isso gera `meu-bairro-seguro-netlify.zip` (e a pasta `dist-netlify/`) com:
+
+- `index.html` — o sistema inteiro num arquivo só (estilos, scripts e bibliotecas embutidos);
+- `share.html` — a página dos links temporários;
+- `_redirects` — o repasse para o servidor.
+
+Arraste o zip (ou a pasta) em <https://app.netlify.com/drop>. No servidor, use `COOKIE_SECURE=1`.
+Sem o servidor configurado, a página avisa que não conseguiu falar com ele.
+
 ## O que faz
 
 | Recurso | Como |

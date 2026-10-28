@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
-  <!-- Página só de agendamento. Rode `python3 build.py` para gerar agendamento-machado.html (arquivo único). -->
+  <!-- Página só de agendamento (dados no Supabase). Rode `python3 build.py` para gerar agendamento-machado.html (arquivo único). -->
   <style>
 /* Barbearia Machado — paleta da logo: preto, vermelho "Machado", cobre do machado e creme */
 :root {
@@ -606,7 +606,10 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
     <form class="login-card" id="loginForm">
       <img class="login-logo" src="img/logo.jpg" alt="Barbearia Machado">
       <h1>Área do barbeiro</h1>
-      <p class="muted">Digite a sua senha para acessar o painel.</p>
+      <div class="field">
+        <label for="email">E-mail</label>
+        <input class="input" id="email" type="email" autocomplete="username" required>
+      </div>
       <div class="field">
         <label for="password">Senha</label>
         <div class="pw-wrap">
@@ -646,11 +649,6 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
     <button class="fab" id="fabNew" aria-label="Novo agendamento">+</button>
 
     <main class="container admin-main">
-      <div class="alert">ℹ️ <strong>Versão HTML:</strong> os dados ficam salvos neste navegador. Agendamentos feitos pelos clientes
-        chegam pelo WhatsApp — cadastre-os aqui em <strong>+ Novo agendamento</strong> para acompanhar ganhos e agenda de cada barbeiro.</div>
-      <div class="alert" id="defaultPwAlert" hidden>
-        ⚠️ Você está usando a senha padrão. Para trocar, edite <code>ADMIN_PASSWORD</code> / <code>BARBER_PASSWORDS</code> no início do código deste arquivo.
-      </div>
 
       <div class="barber-bar" id="barberBar">
         <span>Barbeiro</span>
@@ -924,20 +922,20 @@ const BS = (() => {
 })();
 </script>
 
-<script>/* local-api.js */
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>/* supabase-api.js */
 /*
- * Versão HTML (sem servidor): um "servidor" que roda no próprio navegador e
- * guarda os dados no localStorage. Cada barbeiro tem a própria agenda.
+ * Dados no Supabase: o agendamento do cliente aparece na hora no painel e
+ * o horário some para os outros clientes. Mesmas rotas da versão HTML, para
+ * as telas funcionarem sem alteração. O banco é criado por supabase/schema.sql.
  */
 (() => {
-  // Troque as senhas do painel aqui.
-  // ADMIN_PASSWORD: dono (vê e gerencia todos os barbeiros).
-  // BARBER_PASSWORDS: cada barbeiro vê e gerencia só a própria agenda.
-  const ADMIN_PASSWORD = 'machado2026';
-  const BARBER_PASSWORDS = { emanuel: 'emanuel2026', nick: 'nick2026', joao: 'joao2026' };
-  const DEFAULT_PASSWORDS = { admin: 'machado2026', emanuel: 'emanuel2026', nick: 'nick2026', joao: 'joao2026' };
+  // Cole aqui os dados do seu projeto: Supabase → Project Settings → API.
+  // A chave "anon public" pode ficar no site; as regras do banco protegem os dados.
+  const SUPABASE_URL = '';
+  const SUPABASE_ANON_KEY = '';
 
-  const CFG = {
+  const SITE = {
     name: 'Barbearia Machado Prime',
     phone: '5542999653210',
     phoneDisplay: '(42) 99965-3210',
@@ -945,95 +943,31 @@ const BS = (() => {
     city: 'Castro – PR, 84165-690',
     instagram: 'barbearia_machado_27',
     timezone: 'America/Sao_Paulo',
-    // Horário por dia da semana (0 = domingo). Dia sem entrada = fechado.
-    hours: {
-      1: ['09:00', '20:00'],
-      2: ['09:00', '20:00'],
-      3: ['09:00', '20:00'],
-      4: ['09:00', '20:00'],
-      5: ['09:00', '20:00'],
-      6: ['08:30', '16:00'],
-    },
-    slotStep: 30,
-    bookingWindowDays: 30,
-    // Fotos: coloque o caminho/URL da imagem em "photo" (ex.: 'img/adao.jpg').
-    barbers: [
-      { id: 'adao', name: 'Adão Machado', role: 'Barbeiro Proprietário', owner: true, photo: '',
-        bio: 'Fundador da Barbearia Machado. Corte, barba e prótese capilar com o padrão da casa.' },
-      { id: 'emanuel', name: 'Emanuel Zampieri', role: 'Barbeiro', photo: '',
-        bio: 'Degradês, cortes na tesoura e barba alinhada na navalha.' },
-      { id: 'nick', name: 'Nick Barber', role: 'Barbeiro', photo: '',
-        bio: 'Do navalhado ao platinado, com acabamento caprichado.' },
-      { id: 'joao', name: 'João Wesley Oberek', role: 'Barbeiro', photo: '',
-        bio: 'Corte, barba terapia e tratamentos para cabelo e barba.' },
-    ],
-    categories: ['Cabelo', 'Barba', 'Combos', 'Química e tratamentos', 'Prótese capilar'],
-    services: [
-      { id: 'corte', cat: 'Cabelo', name: 'Corte de Cabelo', price: 45, duration: 40, desc: 'Degradê, social ou na tesoura, com acabamento na navalha.' },
-      { id: 'navalhado', cat: 'Cabelo', name: 'Navalhado', price: 50, duration: 40, desc: 'Corte com acabamento completo na navalha.' },
-      { id: 'alistamento', cat: 'Cabelo', name: 'Alistamento Americano 🇺🇸', price: 70, duration: 40, desc: 'O corte militar no estilo americano, bem batido.' },
-      { id: 'sobrancelha', cat: 'Cabelo', name: 'Sobrancelha', price: 15, duration: 15, desc: 'Sobrancelha alinhada na navalha.' },
-      { id: 'pezinho', cat: 'Cabelo', name: 'Pezinho', price: 15, duration: 15, desc: 'Acabamento do contorno entre um corte e outro.' },
-      { id: 'barba', cat: 'Barba', name: 'Barba', price: 45, duration: 30, desc: 'Barba alinhada e desenhada na navalha.' },
-      { id: 'barba-terapia', cat: 'Barba', name: 'Barba Terapia', price: 45, duration: 40, desc: 'Barba com toalha quente e cuidado relaxante.' },
-      { id: 'hidratacao-barba', cat: 'Barba', name: 'Hidratação de Barba', price: 30, duration: 30, desc: 'Fios macios e barba com brilho saudável.' },
-      { id: 'barba-pintura', cat: 'Barba', name: 'Barba + Pintura de Barba', price: 95, duration: 60, desc: 'Barba feita com pigmentação para cobrir falhas e fios brancos.' },
-      { id: 'corte-barba', cat: 'Combos', name: 'Corte de Cabelo + Barba', price: 90, duration: 60, desc: 'O combo clássico: corte e barba completos.', tag: 'Mais pedido' },
-      { id: 'completo', cat: 'Combos', name: 'Corte + Barba Terapia + Sobrancelha', price: 95, duration: 75, desc: 'O pacote completo para sair impecável.', tag: 'Mais completo' },
-      { id: 'corte-sobrancelha', cat: 'Combos', name: 'Corte de Cabelo + Sobrancelha', price: 50, duration: 45, desc: 'Corte com sobrancelha alinhada.' },
-      { id: 'barba-pezinho', cat: 'Combos', name: 'Barba + Pezinho', price: 60, duration: 45, desc: 'Barba feita e contorno do cabelo em dia.' },
-      { id: 'hidratacao-cabelo', cat: 'Química e tratamentos', name: 'Hidratação de Cabelo', price: 30, duration: 30, desc: 'Tratamento para fios macios e saudáveis.' },
-      { id: 'limpeza-pele', cat: 'Química e tratamentos', name: 'Limpeza de Pele', price: 30, duration: 30, desc: 'Limpeza facial para uma pele renovada.' },
-      { id: 'pintura-cabelo', cat: 'Química e tratamentos', name: 'Pintura de Cabelo', price: 100, duration: 60, desc: 'Coloração para cobrir fios brancos ou mudar o tom.' },
-      { id: 'platinado', cat: 'Química e tratamentos', name: 'Platinado', price: 200, duration: 180, desc: 'Descoloração completa para o loiro platinado.' },
-      { id: 'luzes', cat: 'Química e tratamentos', name: 'Luzes', price: 200, duration: 150, desc: 'Mechas para iluminar o corte.' },
-      { id: 'protese-avaliacao', cat: 'Prótese capilar', name: 'Avaliação Prótese Capilar', price: 0, duration: 30, desc: 'Análise do seu caso para indicar a prótese ideal.', tag: 'Comece aqui' },
-      { id: 'protese-micropele', cat: 'Prótese capilar', name: 'Aplicação Prótese Capilar Micro Pele', price: 2000, duration: 180, desc: 'Prótese com base em micro pele, de aparência natural.' },
-      { id: 'protese-fio-a-fio', cat: 'Prótese capilar', name: 'Aplicação Prótese Fio a Fio', price: 600, duration: 120, desc: 'Aplicação fio a fio para preencher as áreas com falha.' },
-      { id: 'protese-manutencao', cat: 'Prótese capilar', name: 'Manutenção Prótese Capilar', price: 80, duration: 60, desc: 'Limpeza, nova fixação e ajustes da prótese.' },
-      { id: 'protese-tonalizacao', cat: 'Prótese capilar', name: 'Tonalização Prótese Capilar', price: 120, duration: 60, desc: 'Ajuste da cor da prótese ao seu cabelo natural.' },
-    ],
+    slotStep: 30,          // igual a c_step em create_booking
+    bookingWindowDays: 30, // igual a c_window em create_booking
   };
-  const DB_KEY = 'machado-db-v1';
-  const SESSION_KEY = 'machado-admin';
-  const ACTIVE = new Set(['agendado', 'concluido']);
-  const STATUSES = ['agendado', 'concluido', 'cancelado', 'faltou'];
-  const barberById = (id) => CFG.barbers.find((b) => b.id === id);
 
-  // ------------------------------------------------------------- armazenamento
-  function load() {
-    try {
-      return { bookings: [], blocks: [], gallery: [], ...JSON.parse(localStorage.getItem(DB_KEY) || '{}') };
-    } catch {
-      return { bookings: [], blocks: [], gallery: [] };
-    }
-  }
-  let db = load();
-  function save() {
-    try {
-      localStorage.setItem(DB_KEY, JSON.stringify(db));
-    } catch {
-      db = load();
-      fail(507, 'Sem espaço no navegador. Exclua algumas fotos da galeria e tente de novo.');
-    }
-  }
-  // Outra aba alterou os dados: recarrega.
-  window.addEventListener('storage', (e) => { if (e.key === DB_KEY) db = load(); });
+  const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  const sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
   function fail(status, message) {
     const err = new Error(message);
     err.status = status;
     throw err;
   }
-  const clone = (v) => JSON.parse(JSON.stringify(v));
-  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-  function code() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = crypto.getRandomValues(new Uint8Array(6));
-    return [...bytes].map((b) => chars[b % chars.length]).join('');
+
+  /** Converte o erro do Supabase em { status, message } como a versão HTML. */
+  function check({ data, error }) {
+    if (!error) return data;
+    const code = error.code || '';
+    if (/^PT\d{3}$/.test(code)) fail(Number(code.slice(2)), error.message);
+    if (code === '23P01') fail(409, 'Esse horário conflita com outro agendamento deste barbeiro.');
+    if (code === '42501' || code === 'PGRST301') fail(403, 'Sem permissão para isso.');
+    if (/fetch|network/i.test(error.message || '')) fail(503, 'Sem conexão. Verifique sua internet.');
+    fail(400, error.message || 'Algo deu errado. Tente novamente.');
   }
 
-  // -------------------------------------------------------------------- agenda
+  // -------------------------------------------------------------------- tempo
   const toMin = (t) => {
     const [h, m] = t.split(':').map(Number);
     return h * 60 + m;
@@ -1043,7 +977,7 @@ const BS = (() => {
 
   function nowLocal() {
     const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: CFG.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: SITE.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(new Date());
     const get = (type) => parts.find((p) => p.type === type).value;
@@ -1053,169 +987,80 @@ const BS = (() => {
     const [y, m, d] = date.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   }
-  function addDays(date, n) {
-    const [y, m, d] = date.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
-  }
-  /** [abertura, fechamento] do dia, ou null se a barbearia não abre. */
-  const hoursFor = (date) => CFG.hours[weekday(date)] || null;
 
-  /** Intervalos ocupados de um barbeiro: agendamentos dele + bloqueios dele ou da barbearia toda. */
-  function busy(date, barberId, excludeId) {
-    const out = [];
-    for (const b of db.bookings) {
-      if (b.date === date && b.barberId === barberId && ACTIVE.has(b.status) && b.id !== excludeId) out.push([toMin(b.time), toMin(b.time) + b.duration]);
-    }
-    for (const bl of db.blocks) if (bl.date === date && (!bl.barberId || bl.barberId === barberId)) out.push([toMin(bl.start), toMin(bl.end)]);
-    return out;
+  // ----------------------------------------------------------- configuração
+  let cfgPromise;
+  function loadConfig() {
+    if (!configured) return Promise.reject(new Error('Agendamento ainda não configurado.'));
+    cfgPromise ||= Promise.all([
+      sb.from('barbers').select('*').eq('active', true).order('sort'),
+      sb.from('services').select('*').eq('active', true).order('sort'),
+      sb.from('business_hours').select('*'),
+    ]).then(([barbers, services, hours]) => {
+      const list = check(services).map((s) => ({
+        id: s.id, cat: s.cat, name: s.name, price: Number(s.price), duration: s.duration, desc: s.description, tag: s.tag,
+      }));
+      return {
+        ...SITE,
+        barbers: check(barbers).map((b) => ({ id: b.id, name: b.name, role: b.role, owner: b.owner, photo: b.photo, bio: b.bio })),
+        services: list,
+        categories: [...new Set(list.map((s) => s.cat))],
+        hours: Object.fromEntries(check(hours).map((h) => [h.weekday, [h.open_time.slice(0, 5), h.close_time.slice(0, 5)]])),
+      };
+    }).catch((err) => {
+      cfgPromise = null;
+      throw err;
+    });
+    return cfgPromise.then((cfg) => ({ ...cfg, today: nowLocal().date }));
   }
 
-  function barberSlots(date, duration, barberId, excludeId) {
-    const hours = hoursFor(date);
+  // ------------------------------------------------------------- horários
+  /** Horários livres a partir dos intervalos ocupados (barber_id null = barbearia toda). */
+  function freeSlots(cfg, date, duration, barberId, busy, excludeId) {
+    const hours = cfg.hours[weekday(date)];
     if (!hours) return [];
     const now = nowLocal();
     if (date < now.date) return [];
-    const taken = busy(date, barberId, excludeId);
-    const slots = [];
-    for (let s = toMin(hours[0]); s + duration <= toMin(hours[1]); s += CFG.slotStep) {
-      if (date === now.date && s <= now.minutes) continue;
-      if (!taken.some(([a, b]) => overlaps(s, s + duration, a, b))) slots.push(toHHMM(s));
-    }
-    return slots;
-  }
-
-  /** Horários livres; barberId "any" = horário livre com qualquer barbeiro. */
-  function freeSlots(date, duration, barberId, excludeId) {
-    if (barberId !== 'any') return barberSlots(date, duration, barberId, excludeId);
+    const slotsFor = (id) => {
+      const taken = busy.filter((x) => (x.barber_id === id || x.barber_id === null) && (!excludeId || x.booking_id !== excludeId));
+      const out = [];
+      for (let s = toMin(hours[0]); s + duration <= toMin(hours[1]); s += cfg.slotStep) {
+        if (date === now.date && s <= now.minutes) continue;
+        if (!taken.some((x) => overlaps(s, s + duration, x.start_min, x.end_min))) out.push(toHHMM(s));
+      }
+      return out;
+    };
+    if (barberId !== 'any') return slotsFor(barberId);
     const all = new Set();
-    for (const b of CFG.barbers) for (const t of barberSlots(date, duration, b.id, excludeId)) all.add(t);
+    for (const b of cfg.barbers) for (const t of slotsFor(b.id)) all.add(t);
     return [...all].sort();
   }
 
-  function placementError(date, time, duration, barberId, excludeId) {
-    const hours = hoursFor(date);
-    const s = toMin(time);
-    const e = s + duration;
-    if (!hours) return 'A barbearia não abre neste dia.';
-    if (s < toMin(hours[0]) || e > toMin(hours[1])) return `Fora do horário de funcionamento (${hours[0]} às ${hours[1]}).`;
-    if (busy(date, barberId, excludeId).some(([a, b]) => overlaps(s, e, a, b))) return 'Esse horário conflita com outro agendamento ou bloqueio deste barbeiro.';
-    return null;
-  }
-
-  // ---------------------------------------------------------------- validação
-  function requireDate(d) {
-    if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) fail(400, 'Data inválida.');
-    const [y, m, day] = d.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, day));
-    if (dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== day) fail(400, 'Data inválida.');
-    return d;
-  }
-  function requireTime(t) {
-    if (typeof t !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) fail(400, 'Horário inválido.');
-    return t;
-  }
-  function requireService(id) {
-    return CFG.services.find((s) => s.id === id) || fail(400, 'Serviço inválido.');
-  }
-  function requireBarber(id, allowAny) {
-    if (allowAny && id === 'any') return 'any';
-    return (barberById(id) || fail(400, 'Barbeiro inválido.')).id;
-  }
-  const cleanText = (s, max) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-
-  function createBooking(input, sess) {
-    const service = requireService(input.serviceId);
-    const date = requireDate(input.date);
-    const time = requireTime(input.time);
-    const name = cleanText(input.name, 60);
-    if (name.length < 2) fail(400, 'Informe seu nome.');
-    const phone = String(input.phone ?? '').replace(/\D/g, '');
-    if (phone.length < 10 || phone.length > 13) fail(400, 'Informe um telefone/WhatsApp válido com DDD.');
-    let barberId;
-    if (sess) {
-      barberId = sess.role === 'barber' ? sess.barberId : requireBarber(input.barberId, false);
-      const err = placementError(date, time, service.duration, barberId);
-      if (err) fail(409, err);
-    } else {
-      barberId = requireBarber(input.barberId, true);
-      if (date > addDays(nowLocal().date, CFG.bookingWindowDays)) fail(400, `Agendamentos são liberados para os próximos ${CFG.bookingWindowDays} dias.`);
-      if (barberId === 'any') {
-        // Sem preferência: fica com o primeiro barbeiro livre nesse horário.
-        const free = CFG.barbers.find((b) => barberSlots(date, service.duration, b.id).includes(time));
-        if (!free) fail(409, 'Esse horário acabou de ser ocupado. Por favor, escolha outro.');
-        barberId = free.id;
-      } else if (!barberSlots(date, service.duration, barberId).includes(time)) {
-        fail(409, 'Esse horário acabou de ser ocupado. Por favor, escolha outro.');
-      }
-    }
-    const booking = {
-      id: uid(), code: code(), serviceId: service.id, serviceName: service.name, price: service.price,
-      duration: service.duration, barberId, barberName: barberById(barberId).name, date, time, name, phone,
-      notes: cleanText(input.notes, 200), status: 'agendado', source: sess ? 'painel' : 'site',
-      createdAt: new Date().toISOString(), history: [],
-    };
-    db.bookings.push(booking);
-    save();
-    return booking;
-  }
-
-  function updateBooking(id, patch, sess) {
-    const b = db.bookings.find((x) => x.id === id) || fail(404, 'Agendamento não encontrado.');
-    if (sess.role === 'barber' && b.barberId !== sess.barberId) fail(403, 'Esse agendamento é de outro barbeiro.');
-    const before = clone(b);
-    const at = new Date().toISOString();
-    try {
-      if (patch.date !== undefined || patch.time !== undefined || patch.barberId !== undefined) {
-        const date = requireDate(patch.date ?? b.date);
-        const time = requireTime(patch.time ?? b.time);
-        const barberId = sess.role === 'barber' ? b.barberId : requireBarber(patch.barberId ?? b.barberId, false);
-        const err = placementError(date, time, b.duration, barberId, b.id);
-        if (err) fail(409, err);
-        const newName = barberById(barberId).name;
-        const from = `${b.date} ${b.time}${barberId !== b.barberId ? ` (${b.barberName})` : ''}`;
-        const to = `${date} ${time}${barberId !== b.barberId ? ` (${newName})` : ''}`;
-        b.history.push({ at, action: 'remarcado', from, to });
-        Object.assign(b, { date, time, barberId, barberName: newName, status: 'agendado' });
-      }
-      if (patch.status !== undefined) {
-        if (!STATUSES.includes(patch.status)) fail(400, 'Status inválido.');
-        if (patch.status === 'agendado' && b.status !== 'agendado') {
-          const err = placementError(b.date, b.time, b.duration, b.barberId, b.id);
-          if (err) fail(409, err);
-        }
-        if (patch.status !== b.status) {
-          b.history.push({ at, action: patch.status, from: b.status });
-          b.status = patch.status;
-        }
-      }
-      if (patch.notes !== undefined) b.notes = cleanText(patch.notes, 200);
-      if (patch.price !== undefined) {
-        const price = Number(patch.price);
-        if (!Number.isFinite(price) || price < 0 || price > 10000) fail(400, 'Valor inválido.');
-        b.price = Math.round(price * 100) / 100;
-      }
-      save();
-    } catch (err) {
-      Object.assign(b, before);
-      throw err;
-    }
-    return b;
-  }
+  // ------------------------------------------------------------- formato
+  const fromRow = (r) => ({
+    id: r.id, code: r.code, serviceId: r.service_id, serviceName: r.service_name, price: Number(r.price),
+    duration: r.duration, barberId: r.barber_id, barberName: r.barber_name, date: r.date, time: r.time.slice(0, 5),
+    name: r.name, phone: r.phone, notes: r.notes, status: r.status, source: r.source, createdAt: r.created_at,
+    history: r.history || [],
+  });
+  const fromBlock = (b) => ({
+    id: b.id, date: b.date, start: b.start_time.slice(0, 5), end: b.end_time.slice(0, 5), allDay: b.all_day,
+    barberId: b.barber_id || '', reason: b.reason,
+  });
+  const withPrice = (b) => ({ ...b, price: Number(b.price) });
 
   // ---------------------------------------------------------------- sessão
-  async function sha256(text) {
-    if (!crypto.subtle) return text;
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+  async function me() {
+    const { data } = await sb.auth.getSession();
+    const user = data.session?.user;
+    if (!user) return null;
+    const rows = check(await sb.from('staff').select('role, barber_id').eq('user_id', user.id));
+    if (!rows.length) return null;
+    return rows[0].role === 'admin' ? { role: 'admin' } : { role: 'barber', barberId: rows[0].barber_id };
   }
-  /** Sessão: { role: 'admin' } ou { role: 'barber', barberId }. */
-  const session = () => {
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; }
-  };
-  function requireAuth() {
-    return session() || fail(401, 'Faça login para continuar.');
+  async function requireAuth() {
+    return (await me()) || fail(401, 'Faça login para continuar.');
   }
-  /** Barbeiro logado só enxerga a própria agenda; o dono pode filtrar por barbeiro. */
   const scopeBarber = (sess, requested) => (sess.role === 'barber' ? sess.barberId : requested || '');
 
   // ------------------------------------------------------------------ rotas
@@ -1227,107 +1072,112 @@ const BS = (() => {
     const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : (opts.body || {});
     const tail = (prefix) => (p.startsWith(prefix) ? decodeURIComponent(p.slice(prefix.length)) : null);
 
-    if (m === 'GET' && p === '/api/config') return clone({ ...CFG, today: nowLocal().date });
+    if (m === 'GET' && p === '/api/config') return loadConfig();
+    if (!configured) fail(503, 'Agendamento ainda não configurado.');
+
     if (m === 'GET' && p === '/api/availability') {
-      const date = requireDate(q.get('date'));
-      const service = requireService(q.get('service'));
-      const barberId = requireBarber(q.get('barber') || 'any', true);
-      const exclude = session() ? q.get('exclude') || undefined : undefined;
-      return { date, open: Boolean(hoursFor(date)), slots: freeSlots(date, service.duration, barberId, exclude) };
+      const cfg = await loadConfig();
+      const date = q.get('date');
+      const service = cfg.services.find((s) => s.id === q.get('service')) || fail(400, 'Serviço inválido.');
+      const busy = check(await sb.rpc('busy_intervals', { p_date: date }));
+      return {
+        date, open: Boolean(cfg.hours[weekday(date)]),
+        slots: freeSlots(cfg, date, service.duration, q.get('barber') || 'any', busy, q.get('exclude') || undefined),
+      };
     }
     if (m === 'POST' && p === '/api/bookings') {
-      const b = createBooking(body, null);
-      return clone({
-        code: b.code, serviceId: b.serviceId, serviceName: b.serviceName, price: b.price, duration: b.duration,
-        barberId: b.barberId, barberName: b.barberName, date: b.date, time: b.time, name: b.name, phone: b.phone, status: b.status,
-      });
+      return withPrice(check(await sb.rpc('create_booking', {
+        p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
+        p_name: body.name, p_phone: body.phone, p_notes: body.notes || '',
+      })));
     }
-    if (m === 'GET' && p === '/api/gallery') return db.gallery.map((g) => ({ id: g.id, url: g.image, caption: g.caption }));
+    if (m === 'GET' && p === '/api/gallery') {
+      return check(await sb.from('gallery').select('id, image, caption').order('created_at', { ascending: false }))
+        .map((g) => ({ id: g.id, url: g.image, caption: g.caption }));
+    }
 
     if (m === 'POST' && p === '/api/admin/login') {
-      const pw = await sha256(String(body.password || ''));
-      let sess = null;
-      if (pw === await sha256(ADMIN_PASSWORD)) sess = { role: 'admin' };
-      for (const [id, secret] of Object.entries(BARBER_PASSWORDS)) {
-        if (!sess && barberById(id) && pw === await sha256(secret)) sess = { role: 'barber', barberId: id };
+      const email = String(body.email || '').trim();
+      if (!email || !body.password) fail(400, 'Informe e-mail e senha.');
+      const { error } = await sb.auth.signInWithPassword({ email, password: String(body.password) });
+      if (error) fail(401, 'E-mail ou senha incorretos.');
+      const sess = await me();
+      if (!sess) {
+        await sb.auth.signOut();
+        fail(403, 'Este usuário não tem acesso ao painel.');
       }
-      if (!sess) fail(401, 'Senha incorreta.');
-      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(sess)); } catch { /* sem sessão */ }
       return sess;
     }
     if (m === 'POST' && p === '/api/admin/logout') {
-      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ok */ }
+      await sb.auth.signOut();
       return { ok: true };
     }
     if (m === 'GET' && p === '/api/admin/me') {
-      const sess = session();
-      if (!sess) return { authed: false };
-      const defaultPassword = sess.role === 'admin'
-        ? ADMIN_PASSWORD === DEFAULT_PASSWORDS.admin
-        : BARBER_PASSWORDS[sess.barberId] === DEFAULT_PASSWORDS[sess.barberId];
-      return { authed: true, ...sess, defaultPassword };
+      const sess = await me();
+      return sess ? { authed: true, ...sess } : { authed: false };
     }
 
-    const sess = requireAuth();
+    const sess = await requireAuth();
     if (m === 'GET' && p === '/api/admin/bookings') {
+      let req = sb.from('bookings').select('*').order('date').order('time');
       const from = q.get('from');
       const to = q.get('to');
       const barber = scopeBarber(sess, q.get('barber'));
-      return clone(db.bookings.filter((b) => (!from || b.date >= from) && (!to || b.date <= to) && (!barber || b.barberId === barber))
-        .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)));
+      if (from) req = req.gte('date', from);
+      if (to) req = req.lte('date', to);
+      if (barber) req = req.eq('barber_id', barber);
+      return check(await req).map(fromRow);
     }
-    if (m === 'POST' && p === '/api/admin/bookings') return clone(createBooking(body, sess));
-    if (m === 'PATCH' && tail('/api/admin/bookings/')) return clone(updateBooking(tail('/api/admin/bookings/'), body, sess));
+    if (m === 'POST' && p === '/api/admin/bookings') {
+      return withPrice(check(await sb.rpc('create_booking', {
+        p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
+        p_name: body.name, p_phone: body.phone, p_notes: body.notes || '',
+      })));
+    }
+    if (m === 'PATCH' && tail('/api/admin/bookings/')) {
+      return withPrice(check(await sb.rpc('update_booking', { p_id: tail('/api/admin/bookings/'), p_patch: body })));
+    }
 
     if (m === 'GET' && p === '/api/admin/blocks') {
-      const today = nowLocal().date;
       const barber = scopeBarber(sess, q.get('barber'));
-      return clone(db.blocks.filter((b) => b.date >= today && (!barber || !b.barberId || b.barberId === barber))
-        .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)));
+      let req = sb.from('blocks').select('*').gte('date', nowLocal().date).order('date').order('start_time');
+      if (barber) req = req.or(`barber_id.is.null,barber_id.eq.${barber}`);
+      return check(await req).map(fromBlock);
     }
     if (m === 'POST' && p === '/api/admin/blocks') {
-      const date = requireDate(body.date);
-      const hours = hoursFor(date);
+      const cfg = await loadConfig();
+      const date = body.date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) fail(400, 'Data inválida.');
+      const hours = cfg.hours[weekday(date)];
       const allDay = Boolean(body.allDay);
       if (allDay && !hours) fail(400, 'A barbearia já não abre neste dia.');
-      const start = allDay ? hours[0] : requireTime(body.start);
-      const end = allDay ? hours[1] : requireTime(body.end);
-      if (toMin(end) <= toMin(start)) fail(400, 'O horário final deve ser depois do inicial.');
-      const barberId = sess.role === 'barber' ? sess.barberId : (body.barberId ? requireBarber(body.barberId, false) : '');
-      const block = { id: uid(), date, start, end, allDay, barberId, reason: cleanText(body.reason, 80) };
-      const conflicts = db.bookings.filter((b) => b.date === date && b.status === 'agendado' && (!barberId || b.barberId === barberId)
-        && overlaps(toMin(b.time), toMin(b.time) + b.duration, toMin(start), toMin(end))).length;
-      db.blocks.push(block);
-      save();
-      return clone({ block, conflicts });
+      const start = allDay ? hours[0] : body.start;
+      const end = allDay ? hours[1] : body.end;
+      if (!start || !end || toMin(end) <= toMin(start)) fail(400, 'O horário final deve ser depois do inicial.');
+      const barberId = sess.role === 'barber' ? sess.barberId : (body.barberId || null);
+      const row = check(await sb.from('blocks').insert({
+        date, start_time: start, end_time: end, all_day: allDay, barber_id: barberId,
+        reason: String(body.reason || '').trim().slice(0, 80),
+      }).select().single());
+      let conflicts = sb.from('bookings').select('time, duration').eq('date', date).eq('status', 'agendado');
+      if (barberId) conflicts = conflicts.eq('barber_id', barberId);
+      const n = check(await conflicts).filter((b) => overlaps(toMin(b.time), toMin(b.time) + b.duration, toMin(start), toMin(end))).length;
+      return { block: fromBlock(row), conflicts: n };
     }
     if (m === 'DELETE' && tail('/api/admin/blocks/')) {
-      const id = tail('/api/admin/blocks/');
-      const block = db.blocks.find((b) => b.id === id) || fail(404, 'Bloqueio não encontrado.');
-      if (sess.role === 'barber' && block.barberId !== sess.barberId) fail(403, 'Só o dono pode remover este bloqueio.');
-      db.blocks = db.blocks.filter((b) => b.id !== id);
-      save();
+      const removed = check(await sb.from('blocks').delete().eq('id', tail('/api/admin/blocks/')).select('id'));
+      if (!removed.length) fail(403, 'Só o dono pode remover este bloqueio.');
       return { ok: true };
     }
 
     if (m === 'POST' && p === '/api/admin/gallery') {
       const image = String(body.image || '');
       if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) fail(400, 'Envie uma imagem JPG, PNG ou WEBP.');
-      const photo = { id: uid(), image, caption: cleanText(body.caption, 60), createdAt: new Date().toISOString() };
-      db.gallery.unshift(photo);
-      try {
-        save();
-      } catch (err) {
-        db.gallery = db.gallery.filter((g) => g.id !== photo.id);
-        throw err;
-      }
-      return { id: photo.id, url: photo.image, caption: photo.caption };
+      const g = check(await sb.from('gallery').insert({ image, caption: String(body.caption || '').trim().slice(0, 60) }).select().single());
+      return { id: g.id, url: g.image, caption: g.caption };
     }
     if (m === 'DELETE' && tail('/api/admin/gallery/')) {
-      const id = tail('/api/admin/gallery/');
-      if (!db.gallery.some((g) => g.id === id)) fail(404, 'Foto não encontrada.');
-      db.gallery = db.gallery.filter((g) => g.id !== id);
-      save();
+      check(await sb.from('gallery').delete().eq('id', tail('/api/admin/gallery/')));
       return { ok: true };
     }
 
@@ -1337,7 +1187,7 @@ const BS = (() => {
   BS.api = api;
   BS.config = () => api('/api/config');
   // Link de agendamento para mensagens de WhatsApp (só quando o arquivo está publicado num site).
-  BS.bookingLine = () => (location.protocol.startsWith('http') ? ` Ou agende pelo site: ${location.href.split('#')[0]}#/agendar` : '');
+  BS.bookingLine = () => (location.protocol.startsWith('http') ? ` Ou agende pelo site: ${location.href.split('#')[0]}` : '');
 })();
 </script>
 
@@ -1715,14 +1565,13 @@ const Admin = (() => {
     $('appView').hidden = true;
     $('loginView').hidden = false;
     $('password').value = '';
-    setTimeout(() => $('password').focus(), 50);
+    setTimeout(() => ($('email').value ? $('password') : $('email')).focus(), 50);
   }
 
   async function showApp() {
     $('loginView').hidden = true;
     $('appView').hidden = false;
     state.me = await api('/api/admin/me');
-    $('defaultPwAlert').hidden = !state.me.defaultPassword;
     if (isOwner()) {
       state.barber = '';
       $('barberBar').hidden = false;
@@ -1987,7 +1836,7 @@ const Admin = (() => {
       e.preventDefault();
       $('loginError').textContent = '';
       try {
-        await api('/api/admin/login', { method: 'POST', body: { password: $('password').value } });
+        await api('/api/admin/login', { method: 'POST', body: { email: $('email').value, password: $('password').value } });
         await showApp();
       } catch (err) {
         $('loginError').textContent = err.message;

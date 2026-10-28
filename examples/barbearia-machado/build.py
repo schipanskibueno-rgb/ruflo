@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PAGES = {"index.html": "barbearia-machado.html", "agendamento.html": "agendamento-machado.html"}
 REF = re.compile(r"""(?P<q>["'(])(?P<path>img/[\w./-]+\.(?:jpe?g|png|webp|svg))""")
-SOURCE_NOTE = re.compile(r"<!-- (?:Fonte do site|Página só de agendamento)\. Rode `python3 build\.py`[^>]*-->")
+SOURCE_NOTE = re.compile(r"<!-- (?:Fonte do site|Página só de agendamento[^.]*)\. Rode `python3 build\.py`[^>]*-->")
 
 
 def inline(match: re.Match) -> str:

@@ -606,10 +606,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
     <form class="login-card" id="loginForm">
       <img class="login-logo" src="img/logo.jpg" alt="Barbearia Machado">
       <h1>Área do barbeiro</h1>
-      <div class="field">
-        <label for="email">E-mail</label>
-        <input class="input" id="email" type="email" autocomplete="username" required>
-      </div>
+      <p class="muted">Digite a sua senha.</p>
       <div class="field">
         <label for="password">Senha</label>
         <div class="pw-wrap">
@@ -948,7 +945,24 @@ const BS = (() => {
   };
 
   const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  const sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+  // Sessão do painel: o token vai no cabeçalho x-staff-token e o banco descobre quem é.
+  const TOKEN_KEY = 'machado-staff-token';
+  const readToken = () => {
+    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+  };
+  const client = (token) => window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: token ? { 'x-staff-token': token } : {} },
+  });
+  let sb = configured ? client(readToken()) : null;
+  function setToken(token) {
+    try {
+      if (token) localStorage.setItem(TOKEN_KEY, token);
+      else localStorage.removeItem(TOKEN_KEY);
+    } catch { /* modo privado: vale só nesta aba */ }
+    sb = client(token);
+    sessCache = null;
+  }
 
   function fail(status, message) {
     const err = new Error(message);
@@ -960,6 +974,7 @@ const BS = (() => {
   function check({ data, error }) {
     if (!error) return data;
     const code = error.code || '';
+    if (code === 'PT401') sessCache = null;
     if (/^PT\d{3}$/.test(code)) fail(Number(code.slice(2)), error.message);
     if (code === '23P01') fail(409, 'Esse horário conflita com outro agendamento deste barbeiro.');
     if (code === '42501' || code === 'PGRST301') fail(403, 'Sem permissão para isso.');
@@ -1050,13 +1065,17 @@ const BS = (() => {
   const withPrice = (b) => ({ ...b, price: Number(b.price) });
 
   // ---------------------------------------------------------------- sessão
+  let sessCache = null;
   async function me() {
-    const { data } = await sb.auth.getSession();
-    const user = data.session?.user;
-    if (!user) return null;
-    const rows = check(await sb.from('staff').select('role, barber_id').eq('user_id', user.id));
-    if (!rows.length) return null;
-    return rows[0].role === 'admin' ? { role: 'admin' } : { role: 'barber', barberId: rows[0].barber_id };
+    if (!readToken() && !sessCache) return null;
+    if (sessCache) return sessCache;
+    const data = check(await sb.rpc('staff_me'));
+    if (!data) {
+      setToken('');
+      return null;
+    }
+    sessCache = data.role === 'admin' ? { role: 'admin' } : { role: 'barber', barberId: data.barberId };
+    return sessCache;
   }
   async function requireAuth() {
     return (await me()) || fail(401, 'Faça login para continuar.');
@@ -1097,19 +1116,15 @@ const BS = (() => {
     }
 
     if (m === 'POST' && p === '/api/admin/login') {
-      const email = String(body.email || '').trim();
-      if (!email || !body.password) fail(400, 'Informe e-mail e senha.');
-      const { error } = await sb.auth.signInWithPassword({ email, password: String(body.password) });
-      if (error) fail(401, 'E-mail ou senha incorretos.');
-      const sess = await me();
-      if (!sess) {
-        await sb.auth.signOut();
-        fail(403, 'Este usuário não tem acesso ao painel.');
-      }
-      return sess;
+      if (!body.password) fail(400, 'Digite a senha.');
+      const res = check(await sb.rpc('staff_login', { p_password: String(body.password) }));
+      if (!res.ok) fail(res.status, res.message);
+      setToken(res.token);
+      return me();
     }
     if (m === 'POST' && p === '/api/admin/logout') {
-      await sb.auth.signOut();
+      if (readToken()) await sb.rpc('staff_logout');
+      setToken('');
       return { ok: true };
     }
     if (m === 'GET' && p === '/api/admin/me') {
@@ -1565,7 +1580,7 @@ const Admin = (() => {
     $('appView').hidden = true;
     $('loginView').hidden = false;
     $('password').value = '';
-    setTimeout(() => ($('email').value ? $('password') : $('email')).focus(), 50);
+    setTimeout(() => $('password').focus(), 50);
   }
 
   async function showApp() {
@@ -1836,7 +1851,7 @@ const Admin = (() => {
       e.preventDefault();
       $('loginError').textContent = '';
       try {
-        await api('/api/admin/login', { method: 'POST', body: { email: $('email').value, password: $('password').value } });
+        await api('/api/admin/login', { method: 'POST', body: { password: $('password').value } });
         await showApp();
       } catch (err) {
         $('loginError').textContent = err.message;

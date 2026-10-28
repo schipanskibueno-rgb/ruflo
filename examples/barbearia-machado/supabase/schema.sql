@@ -2,17 +2,25 @@
 -- Barbearia Machado — banco de dados do agendamento (Supabase)
 --
 -- Como usar: Supabase → SQL Editor → New query → cole este arquivo inteiro → Run.
--- Pode rodar de novo sem perder agendamentos (os cadastros de barbeiros,
--- serviços e horários são atualizados; as tabelas de dados são mantidas).
+-- Pode rodar de novo sem perder agendamentos nem senhas (os cadastros de
+-- barbeiros, serviços e horários voltam aos valores deste arquivo).
 --
 -- Quem pode o quê:
 --   • Cliente (sem login): vê barbeiros, serviços, horários e quais intervalos
 --     estão ocupados (sem nome nem telefone de ninguém) e cria agendamento.
---   • Dono (staff.role = 'admin'): vê e gerencia tudo.
---   • Barbeiro (staff.role = 'barber'): vê e gerencia só a própria agenda.
+--   • Dono (senha do Adão): vê e gerencia tudo.
+--   • Barbeiro (senha própria): vê e gerencia só a própria agenda.
+--
+-- Senhas iniciais do painel (cada pessoa precisa ter uma senha diferente):
+--   Adão (dono): machado26 · Emanuel: emanuel26 · Nick: nick26 · João: joao26
+-- Para trocar uma senha, rode no SQL Editor (troque o id e a senha):
+--   update public.staff_access set pass_hash = extensions.crypt('NOVA-SENHA', extensions.gen_salt('bf'))
+--   where id = 'nick';      -- ids: adao, emanuel, nick, joao
 -- =============================================================================
 
+create schema if not exists extensions;
 create extension if not exists btree_gist;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ----------------------------------------------------------------- cadastros
 create table if not exists public.barbers (
@@ -46,13 +54,29 @@ create table if not exists public.business_hours (
   check (close_time > open_time)
 );
 
--- Quem acessa o painel: liga o usuário do Supabase Auth ao papel dele.
-create table if not exists public.staff (
-  user_id   uuid primary key references auth.users (id) on delete cascade,
+-- Quem acessa o painel: uma senha por pessoa (guardada só como hash).
+drop table if exists public.staff cascade;  -- versão antiga, com login por e-mail
+create table if not exists public.staff_access (
+  id        text primary key,
   role      text not null check (role in ('admin', 'barber')),
   barber_id text references public.barbers (id),
+  pass_hash text not null,
   check (role = 'admin' or barber_id is not null)
 );
+
+-- Sessões do painel: o navegador guarda o token; aqui fica só o hash dele.
+create table if not exists public.staff_sessions (
+  token_hash text primary key,
+  staff_id   text not null references public.staff_access (id) on delete cascade,
+  expires_at timestamptz not null
+);
+
+-- Tentativas de login erradas (trava contra chute de senha).
+create table if not exists public.login_failures (
+  ip text not null,
+  at timestamptz not null default now()
+);
+create index if not exists login_failures_at_idx on public.login_failures (at);
 
 -- ----------------------------------------------------------------- dados
 create table if not exists public.bookings (
@@ -102,27 +126,42 @@ create table if not exists public.gallery (
 );
 
 -- ----------------------------------------------------------------- quem é quem
+-- O painel manda o token da sessão no cabeçalho "x-staff-token" de cada requisição.
+create or replace function public._request_token_hash() returns text
+language sql stable as $$
+  select encode(extensions.digest(nullif(current_setting('request.headers', true)::json ->> 'x-staff-token', ''), 'sha256'), 'hex');
+$$;
+
+-- Pessoa logada no painel (vazio para clientes).
+create or replace function public._current_staff() returns setof public.staff_access
+language sql stable security definer set search_path = public as $$
+  select a.* from staff_sessions s join staff_access a on a.id = s.staff_id
+  where s.token_hash = _request_token_hash() and s.expires_at > now();
+$$;
+
 create or replace function public.is_staff() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from staff where user_id = auth.uid());
+  select exists (select 1 from _current_staff());
 $$;
 
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from staff where user_id = auth.uid() and role = 'admin');
+  select exists (select 1 from _current_staff() where role = 'admin');
 $$;
 
--- Barbeiro do usuário logado (null para o dono e para clientes).
+-- Barbeiro logado (null para o dono e para clientes).
 create or replace function public.my_barber() returns text
 language sql stable security definer set search_path = public as $$
-  select barber_id from staff where user_id = auth.uid() and role = 'barber';
+  select barber_id from _current_staff() where role = 'barber';
 $$;
 
 -- ----------------------------------------------------------------- regras de acesso (RLS)
 alter table public.barbers        enable row level security;
 alter table public.services       enable row level security;
 alter table public.business_hours enable row level security;
-alter table public.staff          enable row level security;
+alter table public.staff_access   enable row level security;
+alter table public.staff_sessions enable row level security;
+alter table public.login_failures enable row level security;
 alter table public.bookings       enable row level security;
 alter table public.blocks         enable row level security;
 alter table public.gallery        enable row level security;
@@ -130,42 +169,42 @@ alter table public.gallery        enable row level security;
 drop policy if exists "leitura publica" on public.barbers;
 drop policy if exists "dono edita" on public.barbers;
 create policy "leitura publica" on public.barbers for select using (true);
-create policy "dono edita" on public.barbers for all to authenticated using (is_admin()) with check (is_admin());
+create policy "dono edita" on public.barbers for all using (is_admin()) with check (is_admin());
 
 drop policy if exists "leitura publica" on public.services;
 drop policy if exists "dono edita" on public.services;
 create policy "leitura publica" on public.services for select using (true);
-create policy "dono edita" on public.services for all to authenticated using (is_admin()) with check (is_admin());
+create policy "dono edita" on public.services for all using (is_admin()) with check (is_admin());
 
 drop policy if exists "leitura publica" on public.business_hours;
 drop policy if exists "dono edita" on public.business_hours;
 create policy "leitura publica" on public.business_hours for select using (true);
-create policy "dono edita" on public.business_hours for all to authenticated using (is_admin()) with check (is_admin());
+create policy "dono edita" on public.business_hours for all using (is_admin()) with check (is_admin());
 
-drop policy if exists "ve o proprio cadastro" on public.staff;
-create policy "ve o proprio cadastro" on public.staff for select to authenticated using (user_id = auth.uid() or is_admin());
+-- staff_access, staff_sessions e login_failures: sem regras = ninguém lê pela API
+-- (só as funções do banco acessam).
 
 -- Agendamentos: cliente não lê nada (cria pela função create_booking);
 -- equipe lê pela tabela e altera pela função update_booking.
 drop policy if exists "equipe le" on public.bookings;
-create policy "equipe le" on public.bookings for select to authenticated
+create policy "equipe le" on public.bookings for select
   using (is_admin() or barber_id = my_barber());
 
 drop policy if exists "equipe le" on public.blocks;
 drop policy if exists "equipe cria" on public.blocks;
 drop policy if exists "equipe remove" on public.blocks;
-create policy "equipe le" on public.blocks for select to authenticated using (is_staff());
-create policy "equipe cria" on public.blocks for insert to authenticated
+create policy "equipe le" on public.blocks for select using (is_staff());
+create policy "equipe cria" on public.blocks for insert
   with check (is_admin() or (barber_id is not null and barber_id = my_barber()));
-create policy "equipe remove" on public.blocks for delete to authenticated
+create policy "equipe remove" on public.blocks for delete
   using (is_admin() or (barber_id is not null and barber_id = my_barber()));
 
 drop policy if exists "leitura publica" on public.gallery;
 drop policy if exists "equipe envia" on public.gallery;
 drop policy if exists "equipe remove" on public.gallery;
 create policy "leitura publica" on public.gallery for select using (true);
-create policy "equipe envia" on public.gallery for insert to authenticated with check (is_staff());
-create policy "equipe remove" on public.gallery for delete to authenticated using (is_staff());
+create policy "equipe envia" on public.gallery for insert with check (is_staff());
+create policy "equipe remove" on public.gallery for delete using (is_staff());
 
 -- ----------------------------------------------------------------- funções da agenda
 create or replace function public._minutes(t time) returns int
@@ -237,7 +276,7 @@ declare
   c_step   constant int := 30;  -- intervalo da grade de horários (min)
   c_window constant int := 30;  -- dias liberados para o cliente
   c_max    constant int := 3;   -- horários em aberto por telefone (anti-spam)
-  v_staff   staff;
+  v_staff   staff_access;
   v_service services;
   v_barber  text;
   v_now     timestamp := _local_now();
@@ -249,7 +288,7 @@ declare
   v_code    text;
   v_row     bookings;
 begin
-  select * into v_staff from staff where user_id = auth.uid();
+  select * into v_staff from _current_staff();
   select * into v_service from services where id = p_service and active;
   if not found then raise exception using errcode = 'PT400', message = 'Serviço inválido.'; end if;
   if p_date is null or p_time is null then raise exception using errcode = 'PT400', message = 'Data ou horário inválido.'; end if;
@@ -258,7 +297,7 @@ begin
     raise exception using errcode = 'PT400', message = 'Informe um telefone/WhatsApp válido com DDD.';
   end if;
 
-  if v_staff.user_id is not null then
+  if v_staff.id is not null then
     v_barber := case when v_staff.role = 'barber' then v_staff.barber_id else p_barber end;
     if not exists (select 1 from barbers where id = v_barber) then
       raise exception using errcode = 'PT400', message = 'Barbeiro inválido.';
@@ -303,7 +342,7 @@ begin
     insert into bookings (code, service_id, service_name, price, duration, barber_id, barber_name,
                           date, time, name, phone, notes, source)
     select v_code, v_service.id, v_service.name, v_service.price, v_service.duration, b.id, b.name,
-           p_date, p_time, v_name, v_phone, v_notes, case when v_staff.user_id is null then 'site' else 'painel' end
+           p_date, p_time, v_name, v_phone, v_notes, case when v_staff.id is null then 'site' else 'painel' end
       from barbers b where b.id = v_barber
     returning * into v_row;
   exception when exclusion_violation then
@@ -317,7 +356,7 @@ end $$;
 create or replace function public.update_booking(p_id uuid, p_patch jsonb)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
-  v_staff  staff;
+  v_staff  staff_access;
   b        bookings;
   v_date   date;
   v_time   time;
@@ -327,7 +366,7 @@ declare
   v_price  numeric;
   v_status text := p_patch ->> 'status';
 begin
-  select * into v_staff from staff where user_id = auth.uid();
+  select * into v_staff from _current_staff();
   if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
   select * into b from bookings where id = p_id for update;
   if not found then raise exception using errcode = 'PT404', message = 'Agendamento não encontrado.'; end if;
@@ -387,12 +426,57 @@ begin
   return _booking_json(b);
 end $$;
 
+-- ----------------------------------------------------------------- login do painel
+-- Entra só com a senha: cada pessoa tem uma senha diferente.
+-- Não usa "raise" no erro para gravar a tentativa errada (raise desfaria o insert).
+create or replace function public.staff_login(p_password text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  c_max_ip     constant int := 8;   -- tentativas erradas por IP em 15 min
+  c_max_global constant int := 60;  -- tentativas erradas no total em 15 min
+  v_ip    text := coalesce(nullif(btrim(split_part(current_setting('request.headers', true)::json ->> 'x-forwarded-for', ',', 1)), ''), 'desconhecido');
+  v_staff staff_access;
+  v_token text;
+begin
+  delete from login_failures where at < now() - interval '1 day';
+  delete from staff_sessions where expires_at < now();
+  if (select count(*) from login_failures where ip = v_ip and at > now() - interval '15 minutes') >= c_max_ip
+     or (select count(*) from login_failures where at > now() - interval '15 minutes') >= c_max_global then
+    return jsonb_build_object('ok', false, 'status', 429, 'message', 'Muitas tentativas. Aguarde 15 minutos e tente de novo.');
+  end if;
+  select * into v_staff from staff_access
+    where length(coalesce(p_password, '')) > 0 and pass_hash = extensions.crypt(p_password, pass_hash)
+    order by id limit 1;
+  if not found then
+    insert into login_failures (ip) values (v_ip);
+    return jsonb_build_object('ok', false, 'status', 401, 'message', 'Senha incorreta.');
+  end if;
+  v_token := encode(extensions.gen_random_bytes(24), 'hex');
+  insert into staff_sessions (token_hash, staff_id, expires_at)
+    values (encode(extensions.digest(v_token, 'sha256'), 'hex'), v_staff.id, now() + interval '30 days');
+  return jsonb_build_object('ok', true, 'token', v_token, 'role', v_staff.role, 'barberId', v_staff.barber_id);
+end $$;
+
+-- Quem está logado (pelo token do cabeçalho), ou null.
+create or replace function public.staff_me() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('role', role, 'barberId', barber_id) from _current_staff();
+$$;
+
+create or replace function public.staff_logout() returns void
+language sql volatile security definer set search_path = public as $$
+  delete from staff_sessions where token_hash = _request_token_hash();
+$$;
+
 -- Funções internas: ninguém chama direto.
 revoke execute on function public._placement_error(date, time, int, text, uuid) from public, anon, authenticated;
+revoke execute on function public._current_staff() from public, anon, authenticated;
 grant execute on function public.busy_intervals(date) to anon, authenticated;
 grant execute on function public.create_booking(text, text, date, time, text, text, text) to anon, authenticated;
-revoke execute on function public.update_booking(uuid, jsonb) from public, anon;
-grant execute on function public.update_booking(uuid, jsonb) to authenticated;
+grant execute on function public.update_booking(uuid, jsonb) to anon, authenticated;
+grant execute on function public.staff_login(text) to anon, authenticated;
+grant execute on function public.staff_me() to anon, authenticated;
+grant execute on function public.staff_logout() to anon, authenticated;
 
 -- ----------------------------------------------------------------- cadastro inicial
 insert into public.barbers (id, name, role, owner, bio, sort) values
@@ -434,3 +518,11 @@ insert into public.business_hours (weekday, open_time, close_time) values
   (1, '09:00', '20:00'), (2, '09:00', '20:00'), (3, '09:00', '20:00'),
   (4, '09:00', '20:00'), (5, '09:00', '20:00'), (6, '08:30', '16:00')
 on conflict (weekday) do update set open_time = excluded.open_time, close_time = excluded.close_time;
+
+-- Acesso ao painel. Só cria se ainda não existir: rodar de novo não apaga senhas trocadas.
+insert into public.staff_access (id, role, barber_id, pass_hash) values
+  ('adao',    'admin',  'adao',    extensions.crypt('machado26', extensions.gen_salt('bf'))),
+  ('emanuel', 'barber', 'emanuel', extensions.crypt('emanuel26', extensions.gen_salt('bf'))),
+  ('nick',    'barber', 'nick',    extensions.crypt('nick26',    extensions.gen_salt('bf'))),
+  ('joao',    'barber', 'joao',    extensions.crypt('joao26',    extensions.gen_salt('bf')))
+on conflict (id) do nothing;

@@ -118,6 +118,13 @@ create table if not exists public.blocks (
 );
 create index if not exists blocks_date_idx on public.blocks (date);
 
+-- Comissão de cada barbeiro (% sobre cada atendimento concluído). Só o dono vê.
+create table if not exists public.commission_rates (
+  barber_id  text primary key references public.barbers (id) on delete cascade,
+  pct        numeric(5, 2) not null check (pct between 0 and 100),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.gallery (
   id         uuid primary key default gen_random_uuid(),
   image      text not null check (image ~ '^data:image/(jpeg|png|webp);base64,' and length(image) < 3000000),
@@ -165,6 +172,7 @@ alter table public.login_failures enable row level security;
 alter table public.bookings       enable row level security;
 alter table public.blocks         enable row level security;
 alter table public.gallery        enable row level security;
+alter table public.commission_rates enable row level security;
 
 drop policy if exists "leitura publica" on public.barbers;
 drop policy if exists "dono edita" on public.barbers;
@@ -198,6 +206,9 @@ create policy "equipe cria" on public.blocks for insert
   with check (is_admin() or (barber_id is not null and barber_id = my_barber()));
 create policy "equipe remove" on public.blocks for delete
   using (is_admin() or (barber_id is not null and barber_id = my_barber()));
+
+drop policy if exists "dono gerencia" on public.commission_rates;
+create policy "dono gerencia" on public.commission_rates for all using (is_admin()) with check (is_admin());
 
 drop policy if exists "leitura publica" on public.gallery;
 drop policy if exists "equipe envia" on public.gallery;

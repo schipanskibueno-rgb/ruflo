@@ -301,6 +301,11 @@ code { background: var(--card-2); padding: 2px 6px; border-radius: 6px; font-siz
 .tabs button.active { color: var(--red-2); background: rgba(232, 48, 42, .12); }
 .top-actions { display: flex; gap: 8px; align-items: center; }
 .top-actions .btn { white-space: nowrap; }
+.admin-top .brand { flex: none; }
+@media (max-width: 1520px) {
+  .top-actions .who { display: none; }
+  .tabs button { padding: 10px 10px; }
+}
 .who { color: var(--muted); font-size: .85rem; white-space: nowrap; }
 .who strong { color: var(--copper-2); }
 
@@ -430,6 +435,41 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .admin-gallery figcaption { position: absolute; inset: auto 0 0 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); font-size: .82rem; }
 .admin-gallery .del { position: absolute; top: 8px; right: 8px; }
 
+/* comissões */
+.comm-list { display: grid; gap: 14px; }
+.comm { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.comm-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.comm-head strong { display: block; font: 600 1.15rem/1.2 var(--font-head); text-transform: uppercase; letter-spacing: .03em; }
+.comm-head span { color: var(--muted); font-size: .82rem; }
+.comm-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
+.comm-controls .chips button { background: var(--bg-2); }
+.comm-range { display: flex; gap: 8px; }
+.comm-range label, .pct-field { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; font-weight: 600; color: var(--muted); }
+.comm-range .input { padding: 8px 10px; font-size: .9rem; }
+.pct-wrap { position: relative; width: 110px; }
+.pct-wrap .input { padding: 9px 30px 9px 12px; font: 700 1.1rem var(--font-body); }
+.pct-wrap b { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.comm-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.comm-stats div { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.comm-stats small { display: block; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+.comm-stats strong { display: block; font: 600 1.35rem/1.3 var(--font-head); }
+.comm-stats .pay { border-color: rgba(232, 48, 42, .5); background: linear-gradient(135deg, rgba(232, 48, 42, .2), rgba(232, 48, 42, .04)); }
+.comm-stats .pay strong { color: var(--red-2); }
+.comm-note { color: var(--muted); font-size: .82rem; margin: 10px 0 0; }
+.comm details { margin-top: 12px; }
+.comm summary { cursor: pointer; color: var(--copper-2); font-size: .88rem; font-weight: 600; }
+.comm-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 8px; }
+.comm-table td { padding: 6px 4px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.comm-table td:last-child, .comm-table td:nth-child(3) { text-align: right; color: var(--text); white-space: nowrap; }
+.comm-total { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px; padding: 18px 20px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(232, 48, 42, .22), rgba(194, 151, 96, .06)); border: 1px solid rgba(232, 48, 42, .5); }
+.comm-total span { color: var(--muted); font-size: .9rem; }
+.comm-total strong { font: 700 1.9rem/1 var(--font-head); color: var(--red-2); }
+@media (max-width: 640px) {
+  .comm-stats { grid-template-columns: 1fr 1fr; }
+  .comm-stats .pay { grid-column: 1 / -1; }
+}
+
 /* modal */
 .modal { border: 0; padding: 0; background: transparent; color: var(--text); max-width: 560px; width: calc(100% - 24px); }
 .modal::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(3px); }
@@ -443,7 +483,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
 .history { font-size: .82rem; color: var(--muted); margin: 0; padding-left: 18px; }
 
-@media (max-width: 960px) {
+@media (max-width: 1180px) {
   #appView > .credit { padding-bottom: 86px; }
   .grid-2 { grid-template-columns: 1fr; }
   .admin-top { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -461,7 +501,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
     font-size: 1.8rem; box-shadow: var(--shadow); cursor: pointer;
   }
 }
-@media (min-width: 961px) { .fab { display: none; } }
+@media (min-width: 1181px) { .fab { display: none; } }
 @media (max-width: 640px) {
   .bk { grid-template-columns: 60px 1fr; }
   .bk-actions { grid-column: 1 / -1; justify-content: flex-start; }
@@ -634,6 +674,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
           <button data-tab="clientes"><span class="t-ico">👥</span>Clientes</button>
           <button data-tab="bloqueios"><span class="t-ico">⛔</span>Bloqueios</button>
           <button data-tab="galeria"><span class="t-ico">🖼️</span>Galeria</button>
+          <button data-tab="comissoes" id="tabComissoes" hidden><span class="t-ico">💰</span>Comissões</button>
         </nav>
         <div class="top-actions">
           <span class="who" id="whoLabel"></span>
@@ -767,6 +808,14 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
           <button class="btn btn-red" type="submit" id="uploadBtn">Enviar fotos</button>
         </form>
         <div class="admin-gallery" id="adminGallery"></div>
+      </section>
+
+      <!-- COMISSÕES (só o dono) -->
+      <section class="tab" id="tab-comissoes" hidden>
+        <div class="page-head"><h1>Comissões</h1></div>
+        <p class="muted small">Defina a % de cada barbeiro e o período. Entram só atendimentos concluídos, pelo valor cobrado.</p>
+        <div class="comm-list" id="commList"></div>
+        <div class="comm-total"><span>Total a pagar aos barbeiros</span><strong id="commTotal">R$ 0,00</strong></div>
       </section>
     </main>
     <div class="credit" data-credit></div>
@@ -1185,6 +1234,20 @@ const BS = (() => {
       return { ok: true };
     }
 
+    if (m === 'GET' && p === '/api/admin/commissions') {
+      if (sess.role !== 'admin') fail(403, 'Só o dono vê as comissões.');
+      const rows = check(await sb.from('commission_rates').select('barber_id, pct'));
+      return Object.fromEntries(rows.map((r) => [r.barber_id, Number(r.pct)]));
+    }
+    if (m === 'PUT' && p === '/api/admin/commissions') {
+      if (sess.role !== 'admin') fail(403, 'Só o dono altera as comissões.');
+      const pct = Number(body.pct);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) fail(400, 'A porcentagem vai de 0 a 100.');
+      check(await sb.from('commission_rates')
+        .upsert({ barber_id: body.barberId, pct: Math.round(pct * 100) / 100, updated_at: new Date().toISOString() }));
+      return { ok: true };
+    }
+
     if (m === 'POST' && p === '/api/admin/gallery') {
       const image = String(body.image || '');
       if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) fail(400, 'Envie uma imagem JPG, PNG ou WEBP.');
@@ -1593,17 +1656,20 @@ const Admin = (() => {
       $('barberChips').innerHTML = [['', 'Todos'], ...state.cfg.barbers.map((b) => [b.id, b.name])]
         .map(([id, name]) => `<button type="button" data-barber="${esc(id)}" class="${id === state.barber ? 'active' : ''}">${esc(name)}</button>`).join('');
       $('whoLabel').innerHTML = 'Dono · <strong>todos os barbeiros</strong>';
+      $('tabComissoes').hidden = false;
     } else {
       state.barber = state.me.barberId;
       $('barberBar').hidden = true;
+      $('tabComissoes').hidden = true;
       $('whoLabel').innerHTML = `Olá, <strong>${esc(firstName(barberName(state.barber)))}</strong>`;
     }
     switchTab('painel');
   }
 
   function switchTab(tab) {
-    if (!state.loaders[tab]) tab = 'painel';
+    if (!state.loaders[tab] || (tab === 'comissoes' && !isOwner())) tab = 'painel';
     state.tab = tab;
+    $('barberBar').hidden = !isOwner() || tab === 'comissoes';
     for (const b of $('tabs').children) b.classList.toggle('active', b.dataset.tab === tab);
     for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== `tab-${tab}`;
     refresh();
@@ -2385,6 +2451,132 @@ const Admin = (() => {
   });
 
   Admin.register('galeria', loadGallery);
+})();
+</script>
+
+<script>/* admin-comissoes.js */
+/* Aba Comissões (só o dono): % e período de cada barbeiro → quanto pagar. */
+(() => {
+  if (window.CURRENT_VIEW !== 'admin') return;
+  const { esc, brl } = BS;
+  const $ = (id) => document.getElementById(id);
+  const DEFAULT_PCT = 50;
+  const PERIODS_KEY = 'machado-comissao-periodos';
+  const PERIODS = [['week', 'Esta semana'], ['lastweek', 'Semana passada'], ['month', 'Este mês'], ['lastmonth', 'Mês passado'], ['custom', 'Personalizado']];
+  let rates = {};
+  const totals = {};
+  const periods = BS.storage.get(PERIODS_KEY) || {};
+
+  /** Datas [de, até] do período escolhido; semana de segunda a domingo. */
+  function range(period) {
+    const t = Admin.today();
+    const d = BS.parseDate(t);
+    const monday = BS.addDays(t, -((d.getDay() + 6) % 7));
+    switch (period.kind) {
+      case 'week': return [monday, BS.addDays(monday, 6)];
+      case 'lastweek': return [BS.addDays(monday, -7), BS.addDays(monday, -1)];
+      case 'lastmonth': return [BS.isoDate(new Date(d.getFullYear(), d.getMonth() - 1, 1)), BS.isoDate(new Date(d.getFullYear(), d.getMonth(), 0))];
+      case 'custom': return [period.from || t, period.to || t];
+      default: return [BS.isoDate(new Date(d.getFullYear(), d.getMonth(), 1)), BS.isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0))];
+    }
+  }
+
+  const barbers = () => Admin.state.cfg.barbers.filter((b) => !b.owner);
+  const periodOf = (id) => periods[id] || { kind: 'month' };
+
+  function renderTotal() {
+    $('commTotal').textContent = brl(Object.values(totals).reduce((s, v) => s + v, 0));
+  }
+
+  async function loadCard(barber) {
+    const card = $('commList').querySelector(`[data-barber="${barber.id}"]`);
+    const period = periodOf(barber.id);
+    let [from, to] = range(period);
+    if (from > to) [from, to] = [to, from];
+    card.querySelector('.comm-range').hidden = period.kind !== 'custom';
+    for (const b of card.querySelectorAll('[data-kind]')) b.classList.toggle('active', b.dataset.kind === period.kind);
+    const q = new URLSearchParams({ from, to, barber: barber.id });
+    const list = await Admin.call(`/api/admin/bookings?${q}`);
+    const done = list.filter((b) => b.status === 'concluido');
+    const open = list.filter((b) => b.status === 'agendado').length;
+    const pct = rates[barber.id] ?? DEFAULT_PCT;
+    const gross = done.reduce((s, b) => s + b.price, 0);
+    const pay = Math.round(gross * pct) / 100;
+    totals[barber.id] = pay;
+    card.querySelector('.comm-body').innerHTML = `
+      <div class="comm-stats">
+        <div><small>Faturado</small><strong>${brl(gross)}</strong></div>
+        <div><small>Fica na barbearia</small><strong>${brl(gross - pay)}</strong></div>
+        <div class="pay"><small>A pagar (${pct}%)</small><strong>${brl(pay)}</strong></div>
+      </div>
+      <p class="comm-note">${BS.ddmmyyyy(from)} a ${BS.ddmmyyyy(to)} · ${done.length} atendimento(s) concluído(s)${open ? ` · ${open} em aberto (entram quando concluídos)` : ''}</p>
+      ${done.length ? `<details><summary>Ver atendimentos</summary><table class="comm-table">${done.map((b) => `
+        <tr><td>${esc(BS.ddmmyyyy(b.date))} ${esc(b.time)}</td><td>${esc(b.serviceName)}</td><td>${brl(b.price)}</td><td>${brl(Math.round(b.price * pct) / 100)}</td></tr>`).join('')}
+      </table></details>` : ''}`;
+    renderTotal();
+  }
+
+  async function load() {
+    rates = await Admin.call('/api/admin/commissions');
+    $('commList').innerHTML = barbers().map((b) => {
+      const period = periodOf(b.id);
+      return `<div class="comm" data-barber="${esc(b.id)}">
+        <div class="comm-head">${BS.avatar(b, 'sm')}<div><strong>${esc(b.name)}</strong><span>${esc(b.role)}</span></div></div>
+        <div class="comm-controls">
+          <label class="pct-field">Comissão
+            <span class="pct-wrap"><input class="input" type="number" min="0" max="100" step="1" inputmode="decimal" data-pct value="${rates[b.id] ?? DEFAULT_PCT}"><b>%</b></span>
+          </label>
+          <div class="chips">${PERIODS.map(([k, l]) => `<button type="button" data-kind="${k}">${l}</button>`).join('')}</div>
+          <div class="comm-range" ${period.kind === 'custom' ? '' : 'hidden'}>
+            <label>De <input type="date" class="input" data-from value="${esc(period.from || Admin.today())}"></label>
+            <label>Até <input type="date" class="input" data-to value="${esc(period.to || Admin.today())}"></label>
+          </div>
+        </div>
+        <div class="comm-body"><p class="muted small">Calculando…</p></div>
+      </div>`;
+    }).join('') || '<div class="empty">Nenhum barbeiro cadastrado.</div>';
+    await Promise.all(barbers().map(loadCard));
+  }
+
+  const barberOf = (el) => barbers().find((b) => b.id === el.closest('[data-barber]')?.dataset.barber);
+  const savePeriod = (id, period) => {
+    periods[id] = period;
+    BS.storage.set(PERIODS_KEY, periods);
+  };
+  const reload = (barber) => loadCard(barber).catch((err) => BS.toast(err.message, 'error'));
+
+  $('commList').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-kind]');
+    const barber = btn && barberOf(btn);
+    if (!barber) return;
+    const card = btn.closest('[data-barber]');
+    savePeriod(barber.id, { kind: btn.dataset.kind, from: card.querySelector('[data-from]').value, to: card.querySelector('[data-to]').value });
+    reload(barber);
+  });
+
+  $('commList').addEventListener('change', async (e) => {
+    const barber = barberOf(e.target);
+    if (!barber) return;
+    const card = e.target.closest('[data-barber]');
+    if (e.target.matches('[data-from], [data-to]')) {
+      savePeriod(barber.id, { kind: 'custom', from: card.querySelector('[data-from]').value, to: card.querySelector('[data-to]').value });
+      reload(barber);
+      return;
+    }
+    if (!e.target.matches('[data-pct]')) return;
+    const pct = Number(e.target.value);
+    try {
+      await Admin.call('/api/admin/commissions', { method: 'PUT', body: { barberId: barber.id, pct } });
+      rates[barber.id] = pct;
+      BS.toast(`Comissão de ${barber.name.split(' ')[0]}: ${pct}%`);
+      reload(barber);
+    } catch (err) {
+      e.target.value = rates[barber.id] ?? DEFAULT_PCT;
+      BS.toast(err.message, 'error');
+    }
+  });
+
+  Admin.register('comissoes', load);
 })();
 </script>
 </body>

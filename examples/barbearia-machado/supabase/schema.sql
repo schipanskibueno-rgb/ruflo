@@ -102,7 +102,13 @@ create table if not exists public.bookings (
   constraint bookings_no_overlap exclude using gist (barber_id with =, span with &&)
     where (status in ('agendado', 'concluido'))
 );
+-- Colunas adicionadas depois (rodar de novo atualiza bancos antigos).
+alter table public.bookings add column if not exists series_id uuid;            -- agendamento recorrente (todo mês)
+alter table public.bookings add column if not exists completed_at timestamptz;  -- quando foi marcado como concluído
+update public.bookings set completed_at = (date + time) at time zone 'America/Sao_Paulo'
+  where status = 'concluido' and completed_at is null;
 create index if not exists bookings_date_idx on public.bookings (date);
+create index if not exists bookings_series_idx on public.bookings (series_id);
 create index if not exists bookings_phone_idx on public.bookings (phone);
 
 create table if not exists public.blocks (
@@ -124,6 +130,19 @@ create table if not exists public.commission_rates (
   pct        numeric(5, 2) not null check (pct between 0 and 100),
   updated_at timestamptz not null default now()
 );
+
+-- Pagamentos de comissão: cada "zerar" do dono vira um registro; a contagem recomeça dali.
+create table if not exists public.payouts (
+  id        uuid primary key default gen_random_uuid(),
+  barber_id text not null references public.barbers (id) on delete cascade,
+  since     timestamptz,                -- início do que foi pago (null = desde o começo)
+  paid_at   timestamptz not null default now(),
+  pct       numeric(5, 2) not null,
+  count     int not null,
+  gross     numeric(10, 2) not null,
+  amount    numeric(10, 2) not null
+);
+create index if not exists payouts_barber_idx on public.payouts (barber_id, paid_at desc);
 
 create table if not exists public.gallery (
   id         uuid primary key default gen_random_uuid(),
@@ -173,6 +192,7 @@ alter table public.bookings       enable row level security;
 alter table public.blocks         enable row level security;
 alter table public.gallery        enable row level security;
 alter table public.commission_rates enable row level security;
+alter table public.payouts          enable row level security;
 
 drop policy if exists "leitura publica" on public.barbers;
 drop policy if exists "dono edita" on public.barbers;
@@ -209,6 +229,9 @@ create policy "equipe remove" on public.blocks for delete
 
 drop policy if exists "dono gerencia" on public.commission_rates;
 create policy "dono gerencia" on public.commission_rates for all using (is_admin()) with check (is_admin());
+
+drop policy if exists "dono e barbeiro leem" on public.payouts;
+create policy "dono e barbeiro leem" on public.payouts for select using (is_admin() or barber_id = my_barber());
 
 drop policy if exists "leitura publica" on public.gallery;
 drop policy if exists "equipe envia" on public.gallery;
@@ -261,7 +284,7 @@ language sql stable as $$
     'price', b.price, 'duration', b.duration, 'barberId', b.barber_id, 'barberName', b.barber_name,
     'date', to_char(b.date, 'YYYY-MM-DD'), 'time', to_char(b.time, 'HH24:MI'), 'name', b.name,
     'phone', b.phone, 'notes', b.notes, 'status', b.status, 'source', b.source,
-    'createdAt', b.created_at, 'history', b.history);
+    'createdAt', b.created_at, 'history', b.history, 'seriesId', b.series_id, 'completedAt', b.completed_at);
 $$;
 
 -- Intervalos ocupados de um dia (sem dados pessoais). barber_id null = barbearia toda.
@@ -275,18 +298,49 @@ language sql stable security definer set search_path = public as $$
     from blocks bl where bl.date = p_date;
 $$;
 
+create or replace function public._new_booking_code() returns text
+language plpgsql volatile security definer set search_path = public as $$
+declare v_code text;
+begin
+  loop
+    select string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + floor(random() * 32)::int, 1), '')
+      into v_code from generate_series(1, 6);
+    exit when not exists (select 1 from bookings where code = v_code);
+  end loop;
+  return v_code;
+end $$;
+
 -- Cria um agendamento. Cliente: só horários da grade, nos próximos 30 dias.
 -- Equipe logada: qualquer horário dentro do expediente (barbeiro só na própria agenda).
 -- p_barber = 'any' (só cliente): fica com o primeiro barbeiro livre.
+-- Mesmo dia da semana na mesma posição do mês (ex.: 2ª quinta). 5ª ocorrência = última do mês.
+create or replace function public._same_weekday_in_month(p_date date, p_months int) returns date
+language plpgsql immutable as $$
+declare
+  n     int := least(((extract(day from p_date)::int - 1) / 7) + 1, 5);
+  w     int := extract(dow from p_date)::int;
+  first date := (date_trunc('month', p_date) + make_interval(months => p_months))::date;
+  d     date;
+begin
+  d := first + ((w - extract(dow from first)::int + 7) % 7) + (n - 1) * 7;
+  if n = 5 or extract(month from d) <> extract(month from first) then
+    d := first + ((w - extract(dow from first)::int + 7) % 7);
+    while extract(month from d + 7) = extract(month from first) loop d := d + 7; end loop;
+  end if;
+  return d;
+end $$;
+
+drop function if exists public.create_booking(text, text, date, time, text, text, text);
 create or replace function public.create_booking(
   p_barber text, p_service text, p_date date, p_time time,
-  p_name text, p_phone text, p_notes text default ''
+  p_name text, p_phone text, p_notes text default '', p_repeat boolean default false
 ) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
   c_step   constant int := 30;  -- intervalo da grade de horários (min)
   c_window constant int := 30;  -- dias liberados para o cliente
-  c_max    constant int := 3;   -- horários em aberto por telefone (anti-spam)
+  c_max    constant int := 3;   -- horários em aberto por telefone (anti-spam; série recorrente conta 1)
+  c_months constant int := 6;   -- meses criados de uma vez num agendamento recorrente
   v_staff   staff_access;
   v_service services;
   v_barber  text;
@@ -298,6 +352,11 @@ declare
   v_err     text;
   v_code    text;
   v_row     bookings;
+  v_series  uuid;
+  v_next    date;
+  v_code2   text;
+  v_dates   jsonb := '[]';
+  v_skipped jsonb := '[]';
 begin
   select * into v_staff from _current_staff();
   select * into v_service from services where id = p_service and active;
@@ -326,7 +385,8 @@ begin
     if v_open is null or (_minutes(p_time) - _minutes(v_open)) % c_step <> 0 then
       raise exception using errcode = 'PT400', message = 'Horário inválido.';
     end if;
-    if (select count(*) from bookings where phone = v_phone and status = 'agendado' and date >= v_now::date) >= c_max then
+    if (select count(distinct coalesce(series_id, id)) from bookings
+        where phone = v_phone and status = 'agendado' and date >= v_now::date) >= c_max then
       raise exception using errcode = 'PT429',
         message = format('Você já tem %s horários marcados. Para marcar mais, fale com a barbearia no WhatsApp.', c_max);
     end if;
@@ -343,24 +403,43 @@ begin
     end if;
   end if;
 
-  loop
-    select string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + floor(random() * 32)::int, 1), '')
-      into v_code from generate_series(1, 6);
-    exit when not exists (select 1 from bookings where code = v_code);
-  end loop;
-
+  if p_repeat then v_series := gen_random_uuid(); end if;
+  v_code := _new_booking_code();
   begin
     insert into bookings (code, service_id, service_name, price, duration, barber_id, barber_name,
-                          date, time, name, phone, notes, source)
+                          date, time, name, phone, notes, source, series_id)
     select v_code, v_service.id, v_service.name, v_service.price, v_service.duration, b.id, b.name,
-           p_date, p_time, v_name, v_phone, v_notes, case when v_staff.id is null then 'site' else 'painel' end
+           p_date, p_time, v_name, v_phone, v_notes, case when v_staff.id is null then 'site' else 'painel' end, v_series
       from barbers b where b.id = v_barber
     returning * into v_row;
   exception when exclusion_violation then
     raise exception using errcode = 'PT409', message = 'Esse horário acabou de ser ocupado. Por favor, escolha outro.';
   end;
 
-  return _booking_json(v_row);
+  -- Recorrente: mesmo barbeiro, horário e dia da semana do mês, nos próximos meses.
+  -- Mês em que o horário já está ocupado ou bloqueado fica de fora (avisado no retorno).
+  if p_repeat then
+    v_dates := jsonb_build_array(to_char(p_date, 'YYYY-MM-DD'));
+    for i in 1 .. c_months - 1 loop
+      v_next := _same_weekday_in_month(p_date, i);
+      if _placement_error(v_next, p_time, v_service.duration, v_barber, null) is not null then
+        v_skipped := v_skipped || to_jsonb(to_char(v_next, 'YYYY-MM-DD'));
+        continue;
+      end if;
+      v_code2 := _new_booking_code();
+      begin
+        insert into bookings (code, service_id, service_name, price, duration, barber_id, barber_name,
+                              date, time, name, phone, notes, source, series_id)
+        values (v_code2, v_row.service_id, v_row.service_name, v_row.price, v_row.duration, v_row.barber_id,
+                v_row.barber_name, v_next, p_time, v_name, v_phone, v_notes, v_row.source, v_series);
+        v_dates := v_dates || to_jsonb(to_char(v_next, 'YYYY-MM-DD'));
+      exception when exclusion_violation then
+        v_skipped := v_skipped || to_jsonb(to_char(v_next, 'YYYY-MM-DD'));
+      end;
+    end loop;
+  end if;
+
+  return _booking_json(v_row) || jsonb_build_object('repeatDates', v_dates, 'repeatSkipped', v_skipped);
 end $$;
 
 -- Altera um agendamento (equipe): remarcar (date/time/barberId), status, notes, price.
@@ -399,6 +478,7 @@ begin
         'from', to_char(b.date, 'YYYY-MM-DD') || ' ' || to_char(b.time, 'HH24:MI') || case when v_barber <> b.barber_id then ' (' || b.barber_name || ')' else '' end,
         'to', to_char(v_date, 'YYYY-MM-DD') || ' ' || to_char(v_time, 'HH24:MI') || case when v_barber <> b.barber_id then ' (' || v_name || ')' else '' end));
       b.date := v_date; b.time := v_time; b.barber_id := v_barber; b.barber_name := v_name; b.status := 'agendado';
+      b.completed_at := null;
     end if;
 
     if v_status is not null then
@@ -412,6 +492,7 @@ begin
       if v_status <> b.status then
         b.history := b.history || jsonb_build_array(jsonb_build_object('at', now(), 'action', v_status, 'from', b.status));
         b.status := v_status;
+        b.completed_at := case when v_status = 'concluido' then now() end;
       end if;
     end if;
 
@@ -429,12 +510,87 @@ begin
 
   begin
     update bookings set date = b.date, time = b.time, barber_id = b.barber_id, barber_name = b.barber_name,
-                        status = b.status, notes = b.notes, price = b.price, history = b.history
+                        status = b.status, notes = b.notes, price = b.price, history = b.history,
+                        completed_at = b.completed_at
       where id = b.id returning * into b;
   exception when exclusion_violation then
     raise exception using errcode = 'PT409', message = 'Esse horário conflita com outro agendamento deste barbeiro.';
   end;
   return _booking_json(b);
+end $$;
+
+-- Cancela um agendamento recorrente a partir de uma data (equipe; barbeiro só a própria agenda).
+create or replace function public.cancel_series(p_series uuid, p_from date)
+returns int language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access;
+  v_n     int;
+begin
+  select * into v_staff from _current_staff();
+  if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  update bookings set status = 'cancelado',
+         history = history || jsonb_build_array(jsonb_build_object('at', now(), 'action', 'cancelado', 'from', status, 'serie', true))
+   where series_id = p_series and date >= p_from and status = 'agendado'
+     and (v_staff.role = 'admin' or barber_id = v_staff.barber_id);
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+
+-- ----------------------------------------------------------------- comissões
+-- Quanto o barbeiro tem a receber desde o último pagamento (atendimentos concluídos depois dele).
+create or replace function public._commission_summary(p_barber text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  c_default constant numeric := 50;   -- % usada enquanto o dono não define (igual à página)
+  v_since timestamptz;
+  v_pct   numeric;
+  v_items jsonb;
+  v_count int;
+  v_gross numeric;
+begin
+  select max(paid_at) into v_since from payouts where barber_id = p_barber;
+  select coalesce((select pct from commission_rates where barber_id = p_barber), c_default) into v_pct;
+  select count(*), coalesce(sum(price), 0),
+         coalesce(jsonb_agg(jsonb_build_object('date', to_char(date, 'YYYY-MM-DD'), 'time', to_char(time, 'HH24:MI'),
+                  'serviceName', service_name, 'price', price) order by date, time), '[]')
+    into v_count, v_gross, v_items
+    from bookings
+   where barber_id = p_barber and status = 'concluido' and completed_at is not null
+     and (v_since is null or completed_at > v_since);
+  return jsonb_build_object('barberId', p_barber, 'since', v_since, 'pct', v_pct, 'count', v_count,
+                            'gross', v_gross, 'amount', round(v_gross * v_pct / 100, 2), 'items', v_items);
+end $$;
+
+-- Resumo para o painel: o dono vê de qualquer barbeiro; o barbeiro, só o dele.
+create or replace function public.commission_summary(p_barber text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_staff staff_access;
+begin
+  select * into v_staff from _current_staff();
+  if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  if v_staff.role = 'barber' then return _commission_summary(v_staff.barber_id); end if;
+  if p_barber is null then raise exception using errcode = 'PT400', message = 'Barbeiro inválido.'; end if;
+  return _commission_summary(p_barber);
+end $$;
+
+-- Dono paga e zera: registra o pagamento e a contagem do barbeiro recomeça de agora.
+create or replace function public.close_commission(p_barber text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_sum jsonb;
+  v_row payouts;
+begin
+  if not is_admin() then raise exception using errcode = 'PT403', message = 'Só o dono pode zerar as comissões.'; end if;
+  perform pg_advisory_xact_lock(hashtext('payout:' || p_barber));
+  v_sum := _commission_summary(p_barber);
+  if (v_sum ->> 'count')::int = 0 then
+    raise exception using errcode = 'PT400', message = 'Nada a pagar desde o último pagamento.';
+  end if;
+  insert into payouts (barber_id, since, pct, count, gross, amount)
+  values (p_barber, (v_sum ->> 'since')::timestamptz, (v_sum ->> 'pct')::numeric, (v_sum ->> 'count')::int,
+          (v_sum ->> 'gross')::numeric, (v_sum ->> 'amount')::numeric)
+  returning * into v_row;
+  return to_jsonb(v_row);
 end $$;
 
 -- ----------------------------------------------------------------- login do painel
@@ -483,7 +639,12 @@ $$;
 revoke execute on function public._placement_error(date, time, int, text, uuid) from public, anon, authenticated;
 revoke execute on function public._current_staff() from public, anon, authenticated;
 grant execute on function public.busy_intervals(date) to anon, authenticated;
-grant execute on function public.create_booking(text, text, date, time, text, text, text) to anon, authenticated;
+grant execute on function public.create_booking(text, text, date, time, text, text, text, boolean) to anon, authenticated;
+grant execute on function public.cancel_series(uuid, date) to anon, authenticated;
+grant execute on function public.commission_summary(text) to anon, authenticated;
+grant execute on function public.close_commission(text) to anon, authenticated;
+revoke execute on function public._commission_summary(text) from public, anon, authenticated;
+revoke execute on function public._new_booking_code() from public, anon, authenticated;
 grant execute on function public.update_booking(uuid, jsonb) to anon, authenticated;
 grant execute on function public.staff_login(text) to anon, authenticated;
 grant execute on function public.staff_me() to anon, authenticated;

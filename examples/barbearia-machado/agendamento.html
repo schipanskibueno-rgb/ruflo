@@ -435,7 +435,27 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .admin-gallery figcaption { position: absolute; inset: auto 0 0 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); font-size: .82rem; }
 .admin-gallery .del { position: absolute; top: 8px; right: 8px; }
 
+/* agendamento recorrente */
+.repeat-box { display: flex; gap: 12px; align-items: flex-start; background: var(--bg-2); border: 1.5px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; cursor: pointer; }
+.repeat-box:has(input:checked) { border-color: var(--red); background: rgba(232, 48, 42, .08); }
+.repeat-box input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--red); flex: none; }
+.repeat-box strong { display: block; font-size: .98rem; }
+.repeat-box small { color: var(--muted); font-size: .84rem; }
+.status.serie { background: rgba(194, 151, 96, .16); color: var(--copper-2); }
+
+/* barbeiro: quanto tem a receber */
+.earn { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin-bottom: 18px; padding: 20px 22px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(232, 48, 42, .14), rgba(232, 48, 42, .03)); border: 1px solid rgba(232, 48, 42, .45); }
+.earn small { display: block; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+.earn strong { display: block; font: 700 2.3rem/1.15 var(--font-head); color: var(--red-2); }
+.earn p { margin: 4px 0 0; color: var(--muted); font-size: .88rem; }
+.earn .last { text-align: right; }
+.earn .last b { display: block; color: var(--text); font-size: 1.05rem; }
+
 /* comissões */
+.comm-pay { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.comm-pay span { color: var(--muted); font-size: .86rem; }
+.comm-pay span b { color: var(--text); }
 .comm-list { display: grid; gap: 14px; }
 .comm { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
 .comm-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
@@ -443,6 +463,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .comm-head span { color: var(--muted); font-size: .82rem; }
 .comm-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
 .comm-controls .chips button { background: var(--bg-2); }
+.comm-controls .chips button.active { background: var(--red); border-color: var(--red); color: #fff; }
 .comm-range { display: flex; gap: 8px; }
 .comm-range label, .pct-field { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; font-weight: 600; color: var(--muted); }
 .comm-range .input { padding: 8px 10px; font-size: .9rem; }
@@ -468,6 +489,29 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 @media (max-width: 640px) {
   .comm-stats { grid-template-columns: 1fr 1fr; }
   .comm-stats .pay { grid-column: 1 / -1; }
+}
+
+/* Painel em tema claro: números e dados mais fáceis de ler */
+body.light {
+  --bg: #f4f2ee; --bg-2: #ffffff; --card: #ffffff; --card-2: #f2eee8; --line: #e2dbd1;
+  --text: #1c1916; --muted: #6a6158; --cream: #1c1916; --copper: #8a5a25; --copper-2: #8a5a25;
+  --red: #d42a24; --red-2: #c0231d; --ok: #1d8450; --danger: #c3362c; --warn: #a96600; --info: #2c5fc4;
+  --shadow: 0 6px 20px rgba(40, 30, 20, .08);
+  background: var(--bg); color: var(--text);
+}
+body.light .admin-top { background: rgba(255, 255, 255, .94); }
+body.light .admin-top .brand-logo, body.light .login-logo { border-radius: 10px; }
+body.light .login-wrap { background: radial-gradient(ellipse at 50% 0%, rgba(212, 42, 36, .1), transparent 60%), var(--bg); }
+body.light .credit { background: #ebe6df; color: #7a7067; border-top-color: var(--line); }
+body.light .credit a { color: #5d554d; }
+body.light .credit strong { color: #4a433c; }
+body.light .avatar { background: radial-gradient(circle at 50% 35%, #ffffff, #efe8de); }
+body.light .top-row .meter { background: var(--card-2); }
+body.light .alert { color: #7a4f00; }
+body.light input[type="date"], body.light input[type="time"] { color-scheme: light; }
+body.light .bk, body.light .client, body.light .block-item, body.light .panel, body.light .kpi, body.light .comm { box-shadow: 0 1px 2px rgba(40, 30, 20, .05); }
+@media (max-width: 1180px) {
+  body.light .tabs { background: rgba(255, 255, 255, .98); }
 }
 
 /* modal */
@@ -591,6 +635,10 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
               <label for="notes">Observação</label>
               <textarea class="input" id="notes" name="notes" maxlength="200" placeholder="Opcional"></textarea>
             </div>
+            <label class="repeat-box">
+              <input type="checkbox" id="repeat">
+              <span><strong>🔁 Repetir todo mês</strong><small id="repeatHint">Mesmo barbeiro e horário, nos próximos 6 meses</small></span>
+            </label>
             <p class="form-error" id="formError" role="alert"></p>
             <div class="step-nav">
               <button type="button" class="btn btn-ghost" data-go="3">← Trocar horário</button>
@@ -618,6 +666,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
           <div><dt>Horário</dt><dd id="tTime"></dd></div>
           <div><dt>Valor</dt><dd id="tPrice"></dd></div>
           <div><dt>Duração</dt><dd id="tDuration"></dd></div>
+          <div class="full" id="tRepeatRow" hidden><dt>🔁 Todo mês</dt><dd id="tRepeat"></dd></div>
           <div class="full"><dt>Endereço</dt><dd>R. Cel. Olegário de Macedo, 134 – Água Suja, Castro – PR</dd></div>
         </dl>
         <p class="ticket-print">📸 Tire um print desta tela</p>
@@ -710,6 +759,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
           <label>Até <input type="date" class="input" id="dashTo"></label>
           <button class="btn btn-red btn-sm" id="dashApply">Aplicar</button>
         </div>
+        <div class="earn" id="earnPanel" hidden></div>
         <div class="kpis" id="kpis"></div>
         <div class="panel warn" id="pendingPanel" hidden>
           <h3>⏳ Atendimentos que já passaram e estão sem baixa</h3>
@@ -813,7 +863,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
       <!-- COMISSÕES (só o dono) -->
       <section class="tab" id="tab-comissoes" hidden>
         <div class="page-head"><h1>Comissões</h1></div>
-        <p class="muted small">Defina a % de cada barbeiro e o período. Entram só atendimentos concluídos, pelo valor cobrado.</p>
+        <p class="muted small">Defina a % de cada barbeiro. Entram só atendimentos concluídos, pelo valor cobrado. Ao pagar, toque em “Pagar e zerar” para a contagem recomeçar.</p>
         <div class="comm-list" id="commList"></div>
         <div class="comm-total"><span>Total a pagar aos barbeiros</span><strong id="commTotal">R$ 0,00</strong></div>
       </section>
@@ -839,6 +889,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   const view = location.hash.startsWith('#/admin') ? 'admin' : 'agendar';
   for (const name of Object.keys(views)) document.getElementById('view-' + name).hidden = name !== view;
   document.title = views[view];
+  document.body.classList.toggle('light', view === 'admin');
   window.CURRENT_VIEW = view;
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#/"]');
@@ -930,6 +981,17 @@ const BS = (() => {
   };
   const waLink = (phone, text) => `https://wa.me/${waNumber(phone)}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
 
+  /** "Toda 2ª quinta-feira" — mesma regra do banco (5ª ocorrência = última do mês). */
+  function monthlyRule(date) {
+    const d = parseDate(date);
+    const n = Math.min(Math.ceil(d.getDate() / 7), 5);
+    const wd = d.getDay();
+    const male = wd === 0 || wd === 6;
+    const day = `${WEEKDAYS[wd].toLowerCase()}${wd >= 1 && wd <= 5 ? '-feira' : ''}`;
+    const pos = n === 5 ? (male ? 'último' : 'última') : `${n}${male ? 'º' : 'ª'}`;
+    return { text: `${male ? 'Todo' : 'Toda'} ${pos} ${day} do mês`, byday: `${n === 5 ? -1 : n}${['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][wd]}` };
+  }
+
   /** Iniciais para o avatar quando o barbeiro ainda não tem foto. */
   const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   const avatar = (b, cls = '') => `<div class="avatar ${cls}">${b.photo
@@ -963,7 +1025,7 @@ const BS = (() => {
 
   return {
     esc, brl, priceText, parseDate, isoDate, addDays, weekday, ddmmyyyy, fmtDateLong, fmtDateShort,
-    toMin, toHHMM, endTime, fmtDuration, fmtHour, fmtPhone, maskPhone, waLink, initials, avatar, toast, storage, WEEKDAYS,
+    toMin, toHHMM, endTime, fmtDuration, fmtHour, fmtPhone, maskPhone, waLink, initials, avatar, toast, storage, WEEKDAYS, monthlyRule,
   };
 })();
 </script>
@@ -1105,7 +1167,7 @@ const BS = (() => {
     id: r.id, code: r.code, serviceId: r.service_id, serviceName: r.service_name, price: Number(r.price),
     duration: r.duration, barberId: r.barber_id, barberName: r.barber_name, date: r.date, time: r.time.slice(0, 5),
     name: r.name, phone: r.phone, notes: r.notes, status: r.status, source: r.source, createdAt: r.created_at,
-    history: r.history || [],
+    history: r.history || [], seriesId: r.series_id, completedAt: r.completed_at,
   });
   const fromBlock = (b) => ({
     id: b.id, date: b.date, start: b.start_time.slice(0, 5), end: b.end_time.slice(0, 5), allDay: b.all_day,
@@ -1156,7 +1218,7 @@ const BS = (() => {
     if (m === 'POST' && p === '/api/bookings') {
       return withPrice(check(await sb.rpc('create_booking', {
         p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
-        p_name: body.name, p_phone: body.phone, p_notes: body.notes || '',
+        p_name: body.name, p_phone: body.phone, p_notes: body.notes || '', p_repeat: Boolean(body.repeat),
       })));
     }
     if (m === 'GET' && p === '/api/gallery') {
@@ -1195,8 +1257,26 @@ const BS = (() => {
     if (m === 'POST' && p === '/api/admin/bookings') {
       return withPrice(check(await sb.rpc('create_booking', {
         p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
-        p_name: body.name, p_phone: body.phone, p_notes: body.notes || '',
+        p_name: body.name, p_phone: body.phone, p_notes: body.notes || '', p_repeat: Boolean(body.repeat),
       })));
+    }
+    if (m === 'POST' && p === '/api/admin/series-cancel') {
+      return { cancelled: check(await sb.rpc('cancel_series', { p_series: body.seriesId, p_from: body.from })) };
+    }
+    if (m === 'GET' && p === '/api/admin/commission-summary') {
+      const r = check(await sb.rpc('commission_summary', { p_barber: q.get('barber') || null }));
+      return { ...r, pct: Number(r.pct), gross: Number(r.gross), amount: Number(r.amount), items: r.items.map(withPrice) };
+    }
+    if (m === 'POST' && p === '/api/admin/commission-close') {
+      const r = check(await sb.rpc('close_commission', { p_barber: body.barberId }));
+      return { ...r, amount: Number(r.amount) };
+    }
+    if (m === 'GET' && p === '/api/admin/payouts') {
+      let req = sb.from('payouts').select('*').order('paid_at', { ascending: false }).limit(5);
+      const barber = scopeBarber(sess, q.get('barber'));
+      if (barber) req = req.eq('barber_id', barber);
+      return check(await req).map((r) => ({ id: r.id, barberId: r.barber_id, since: r.since, paidAt: r.paid_at,
+        pct: Number(r.pct), count: r.count, gross: Number(r.gross), amount: Number(r.amount) }));
     }
     if (m === 'PATCH' && tail('/api/admin/bookings/')) {
       return withPrice(check(await sb.rpc('update_booking', { p_id: tail('/api/admin/bookings/'), p_patch: body })));
@@ -1306,6 +1386,7 @@ const BS = (() => {
       li.classList.toggle('done', n < step);
     }
     renderSummary();
+    if (step === 4 && state.date && state.time) $('repeatHint').textContent = `${BS.monthlyRule(state.date).text}, às ${state.time} · próximos 6 meses`;
     if (step === 4) setTimeout(() => $('name').focus(), 50);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -1521,7 +1602,7 @@ const BS = (() => {
         method: 'POST',
         body: {
           barberId: state.barber.id, serviceId: state.service.id, date: state.date, time: state.time,
-          name, phone: digits, notes: $('notes').value,
+          name, phone: digits, notes: $('notes').value, repeat: $('repeat').checked,
         },
       });
       BS.storage.set('machado-client', { name, phone });
@@ -1553,6 +1634,7 @@ const BS = (() => {
       location: `${cfg.address}, ${cfg.city}`,
       details: `Código: ${b.code}\nBarbeiro: ${b.barberName}\nValor: ${b.price ? brl(b.price) : 'a consultar'}\nWhatsApp: ${cfg.phoneDisplay}`,
     });
+    if ((b.repeatDates || []).length > 1) params.set('recur', `RRULE:FREQ=MONTHLY;BYDAY=${BS.monthlyRule(b.date).byday};COUNT=6`);
     return `https://calendar.google.com/calendar/render?${params}`;
   }
 
@@ -1570,6 +1652,13 @@ const BS = (() => {
     $('tTime').textContent = `${b.time} às ${endTime(b.time, b.duration)}`;
     $('tPrice').textContent = b.price ? brl(b.price) : 'A consultar';
     $('tDuration').textContent = fmtDuration(b.duration);
+    const repeatDates = (b.repeatDates || []).slice(1);
+    const skipped = b.repeatSkipped || [];
+    $('tRepeatRow').hidden = !repeatDates.length && !skipped.length;
+    $('tRepeat').textContent = [
+      repeatDates.length ? `Também agendado: ${repeatDates.map(BS.fmtDateShort).join(', ')}` : '',
+      skipped.length ? `Sem vaga em: ${skipped.map(BS.fmtDateShort).join(', ')}` : '',
+    ].filter(Boolean).join(' · ');
 
     const msg = [
       'Olá! Acabei de agendar pelo site da *Barbearia Machado* 🪓✂️',
@@ -1580,6 +1669,7 @@ const BS = (() => {
       `*Serviço:* ${b.serviceName}${b.price ? ` (${brl(b.price)})` : ''}`,
       `*Data:* ${fmtDateLong(b.date)}`,
       `*Horário:* ${b.time}`,
+      ...(repeatDates.length ? [`*Todo mês:* também ${repeatDates.map(BS.fmtDateShort).join(', ')}`] : []),
       '',
       'Pode confirmar, por favor?',
     ].join('\n');
@@ -1705,7 +1795,7 @@ const Admin = (() => {
       <div class="bk-time"><strong>${esc(b.time)}</strong><span>até ${esc(endTime(b.time, b.duration))}</span>
         ${showDate ? `<span>${esc(BS.fmtDateShort(b.date))}</span>` : ''}</div>
       <div class="bk-info">
-        <strong>${esc(b.name)}</strong> <span class="status ${b.status}">${STATUS_LABEL[b.status]}</span>
+        <strong>${esc(b.name)}</strong> <span class="status ${b.status}">${STATUS_LABEL[b.status]}</span>${b.seriesId ? ' <span class="status serie" title="Agendamento recorrente">🔁 mensal</span>' : ''}
         <div class="line"><span class="who-b">✂ ${esc(b.barberName)}</span><span>${esc(b.serviceName)}</span><span>${b.price ? brl(b.price) : 'a consultar'}</span><span>${esc(BS.fmtPhone(b.phone))}</span><span>#${esc(b.code)}</span></div>
         ${b.notes ? `<div class="note">“${esc(b.notes)}”</div>` : ''}
       </div>
@@ -1770,6 +1860,7 @@ const Admin = (() => {
       <div class="modal-actions">
         <button class="btn btn-ghost" id="mNo">Voltar</button>
         <button class="btn btn-danger" id="mYes">Cancelar</button>
+        ${b.seriesId ? '<button class="btn btn-danger" id="mYesSeries">Cancelar este e os próximos</button>' : ''}
         <a class="btn btn-wa" id="mYesWa" target="_blank" rel="noopener" href="${esc(BS.waLink(b.phone, waMessage(b, 'cancel')))}">Cancelar e avisar no WhatsApp</a>
       </div>`);
     $('mNo').onclick = closeModal;
@@ -1781,6 +1872,16 @@ const Admin = (() => {
     };
     $('mYes').onclick = doCancel;
     $('mYesWa').addEventListener('click', doCancel);
+    if (b.seriesId) {
+      $('mYesSeries').onclick = async () => {
+        try {
+          const { cancelled } = await call('/api/admin/series-cancel', { method: 'POST', body: { seriesId: b.seriesId, from: b.date } });
+          closeModal();
+          BS.toast(`${cancelled} horário(s) da série cancelado(s).`);
+          refresh();
+        } catch (err) { BS.toast(err.message, 'error'); }
+      };
+    }
   }
 
   /** Seletor de horários livres do barbeiro + campo manual. Chama onChange(time). */
@@ -1881,6 +1982,7 @@ const Admin = (() => {
         <div class="field"><label for="nPhone">Telefone</label><input class="input" id="nPhone" type="tel" placeholder="(42) 99999-9999"></div>
       </div>
       <div class="field"><label for="nNotes">Observação</label><input class="input" id="nNotes" maxlength="200"></div>
+      <label class="repeat-box"><input type="checkbox" id="nRepeat"><span><strong>🔁 Repetir todo mês</strong><small>Mesmo dia da semana do mês e horário, nos próximos 6 meses</small></span></label>
       <p class="form-error" id="nErr"></p>
       <div class="modal-actions"><button class="btn btn-ghost" id="nCancel">Cancelar</button><button class="btn btn-red" id="nSave">Agendar</button></div>`);
     BS.maskPhone($('nPhone'));
@@ -1896,15 +1998,17 @@ const Admin = (() => {
     $('nCancel').onclick = closeModal;
     $('nSave').onclick = async () => {
       try {
-        await call('/api/admin/bookings', {
+        const created = await call('/api/admin/bookings', {
           method: 'POST',
           body: {
             barberId: $('nBarber').value, serviceId: $('nService').value, date: $('nDate').value, time,
-            name: $('nName').value, phone: $('nPhone').value, notes: $('nNotes').value,
+            name: $('nName').value, phone: $('nPhone').value, notes: $('nNotes').value, repeat: $('nRepeat').checked,
           },
         });
         closeModal();
-        BS.toast('Agendamento criado!');
+        const extra = (created.repeatDates || []).length - 1;
+        const skipped = (created.repeatSkipped || []).length;
+        BS.toast(extra > 0 || skipped ? `Agendado + ${extra} mês(es)${skipped ? ` · ${skipped} sem vaga` : ''}.` : 'Agendamento criado!');
         refresh();
       } catch (err) { $('nErr').textContent = err.message; }
     };
@@ -2079,7 +2183,28 @@ const Admin = (() => {
       </div>`).join('');
   }
 
+  const fmtWhen = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  /** Barbeiro logado: quanto tem a receber desde o último pagamento, pela % que o Adão definiu. */
+  async function earnings() {
+    if (Admin.isOwner()) {
+      $('earnPanel').hidden = true;
+      return;
+    }
+    const [sum, payouts] = await Promise.all([Admin.call('/api/admin/commission-summary'), Admin.call('/api/admin/payouts')]);
+    const last = payouts[0];
+    $('earnPanel').hidden = false;
+    $('earnPanel').innerHTML = `<div>
+        <small>Para receber até hoje</small>
+        <strong>${brl(sum.amount)}</strong>
+        <p>${sum.count} atendimento(s) concluído(s) · ${brl(sum.gross)} faturado · ${sum.pct}% definido pelo Adão
+          · desde ${sum.since ? fmtWhen(sum.since) : 'o início'}</p>
+      </div>
+      ${last ? `<div class="last"><small>Último pagamento</small><b>${brl(last.amount)}</b><p>${esc(fmtWhen(last.paidAt))}</p></div>` : ''}`;
+  }
+
   async function load() {
+    earnings().catch((err) => BS.toast(err.message, 'error'));
     const [from, to] = range();
     const t = Admin.today();
     const [list, todayList, recent] = await Promise.all([
@@ -2455,17 +2580,19 @@ const Admin = (() => {
 </script>
 
 <script>/* admin-comissoes.js */
-/* Aba Comissões (só o dono): % e período de cada barbeiro → quanto pagar. */
+/* Aba Comissões (só o dono): % e período de cada barbeiro → quanto pagar; "Pagar e zerar" recomeça a contagem. */
 (() => {
   if (window.CURRENT_VIEW !== 'admin') return;
   const { esc, brl } = BS;
   const $ = (id) => document.getElementById(id);
-  const DEFAULT_PCT = 50;
+  const DEFAULT_PCT = 50; // igual a c_default em _commission_summary (schema.sql)
   const PERIODS_KEY = 'machado-comissao-periodos';
-  const PERIODS = [['week', 'Esta semana'], ['lastweek', 'Semana passada'], ['month', 'Este mês'], ['lastmonth', 'Mês passado'], ['custom', 'Personalizado']];
+  const PERIODS = [['since', 'Desde o último pagamento'], ['week', 'Esta semana'], ['lastweek', 'Semana passada'],
+    ['month', 'Este mês'], ['lastmonth', 'Mês passado'], ['custom', 'Personalizado']];
   let rates = {};
   const totals = {};
   const periods = BS.storage.get(PERIODS_KEY) || {};
+  const fmtWhen = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   /** Datas [de, até] do período escolhido; semana de segunda a domingo. */
   function range(period) {
@@ -2482,36 +2609,60 @@ const Admin = (() => {
   }
 
   const barbers = () => Admin.state.cfg.barbers.filter((b) => !b.owner);
-  const periodOf = (id) => periods[id] || { kind: 'month' };
+  const periodOf = (id) => (PERIODS.some(([k]) => k === periods[id]?.kind) ? periods[id] : { kind: 'since' });
+  const summaries = {};
 
   function renderTotal() {
     $('commTotal').textContent = brl(Object.values(totals).reduce((s, v) => s + v, 0));
   }
 
+  const itemsTable = (items, pct) => (items.length ? `<details><summary>Ver atendimentos</summary><table class="comm-table">${items.map((b) => `
+    <tr><td>${esc(BS.ddmmyyyy(b.date))} ${esc(b.time)}</td><td>${esc(b.serviceName)}</td><td>${brl(b.price)}</td><td>${brl(Math.round(b.price * pct) / 100)}</td></tr>`).join('')}
+    </table></details>` : '');
+
   async function loadCard(barber) {
     const card = $('commList').querySelector(`[data-barber="${barber.id}"]`);
     const period = periodOf(barber.id);
-    let [from, to] = range(period);
-    if (from > to) [from, to] = [to, from];
     card.querySelector('.comm-range').hidden = period.kind !== 'custom';
     for (const b of card.querySelectorAll('[data-kind]')) b.classList.toggle('active', b.dataset.kind === period.kind);
-    const q = new URLSearchParams({ from, to, barber: barber.id });
-    const list = await Admin.call(`/api/admin/bookings?${q}`);
-    const done = list.filter((b) => b.status === 'concluido');
-    const open = list.filter((b) => b.status === 'agendado').length;
-    const pct = rates[barber.id] ?? DEFAULT_PCT;
-    const gross = done.reduce((s, b) => s + b.price, 0);
-    const pay = Math.round(gross * pct) / 100;
+
+    const [sum, payouts] = await Promise.all([
+      Admin.call(`/api/admin/commission-summary?barber=${encodeURIComponent(barber.id)}`),
+      Admin.call(`/api/admin/payouts?barber=${encodeURIComponent(barber.id)}`),
+    ]);
+    summaries[barber.id] = sum;
+    let gross; let pay; let pct; let note; let items;
+    if (period.kind === 'since') {
+      ({ gross, pct, items } = sum);
+      pay = sum.amount;
+      note = `Desde ${sum.since ? `o último pagamento (${fmtWhen(sum.since)})` : 'o início'} · ${sum.count} atendimento(s) concluído(s)`;
+    } else {
+      let [from, to] = range(period);
+      if (from > to) [from, to] = [to, from];
+      const list = await Admin.call(`/api/admin/bookings?${new URLSearchParams({ from, to, barber: barber.id })}`);
+      items = list.filter((b) => b.status === 'concluido');
+      const open = list.filter((b) => b.status === 'agendado').length;
+      pct = rates[barber.id] ?? DEFAULT_PCT;
+      gross = items.reduce((s, b) => s + b.price, 0);
+      pay = Math.round(gross * pct) / 100;
+      note = `${BS.ddmmyyyy(from)} a ${BS.ddmmyyyy(to)} · ${items.length} atendimento(s) concluído(s)${open ? ` · ${open} em aberto (entram quando concluídos)` : ''}`;
+    }
     totals[barber.id] = pay;
+    const last = payouts[0];
     card.querySelector('.comm-body').innerHTML = `
       <div class="comm-stats">
         <div><small>Faturado</small><strong>${brl(gross)}</strong></div>
         <div><small>Fica na barbearia</small><strong>${brl(gross - pay)}</strong></div>
         <div class="pay"><small>A pagar (${pct}%)</small><strong>${brl(pay)}</strong></div>
       </div>
-      <p class="comm-note">${BS.ddmmyyyy(from)} a ${BS.ddmmyyyy(to)} · ${done.length} atendimento(s) concluído(s)${open ? ` · ${open} em aberto (entram quando concluídos)` : ''}</p>
-      ${done.length ? `<details><summary>Ver atendimentos</summary><table class="comm-table">${done.map((b) => `
-        <tr><td>${esc(BS.ddmmyyyy(b.date))} ${esc(b.time)}</td><td>${esc(b.serviceName)}</td><td>${brl(b.price)}</td><td>${brl(Math.round(b.price * pct) / 100)}</td></tr>`).join('')}
+      <p class="comm-note">${esc(note)}</p>
+      ${itemsTable(items, pct)}
+      <div class="comm-pay">
+        <span>${last ? `Último pagamento: <b>${brl(last.amount)}</b> em ${esc(fmtWhen(last.paidAt))}` : 'Nenhum pagamento registrado ainda.'}</span>
+        <button type="button" class="btn btn-red btn-sm" data-close ${sum.count ? '' : 'disabled'}>✓ Pagar e zerar · ${brl(sum.amount)}</button>
+      </div>
+      ${payouts.length > 1 ? `<details><summary>Pagamentos anteriores</summary><table class="comm-table">${payouts.map((x) => `
+        <tr><td>${esc(fmtWhen(x.paidAt))}</td><td>${x.count} atend. · ${x.pct}%</td><td>${brl(x.gross)}</td><td>${brl(x.amount)}</td></tr>`).join('')}
       </table></details>` : ''}`;
     renderTotal();
   }
@@ -2545,7 +2696,37 @@ const Admin = (() => {
   };
   const reload = (barber) => loadCard(barber).catch((err) => BS.toast(err.message, 'error'));
 
+  function confirmClose(barber) {
+    const sum = summaries[barber.id];
+    const first = barber.name.split(' ')[0];
+    Admin.openModal(`<h2>Pagar ${esc(first)} e zerar?</h2>
+      <p><strong style="font-size:1.6rem;color:var(--red-2)">${brl(sum.amount)}</strong></p>
+      <p class="muted small">${sum.count} atendimento(s) concluído(s) · ${brl(sum.gross)} faturado · ${sum.pct}%
+        · desde ${sum.since ? esc(fmtWhen(sum.since)) : 'o início'}</p>
+      <p class="small">O pagamento fica registrado e a contagem de ${esc(first)} recomeça do zero a partir de agora.</p>
+      <div class="modal-actions"><button class="btn btn-ghost" id="cNo">Voltar</button><button class="btn btn-red" id="cYes">✓ Paguei, zerar</button></div>`);
+    $('cNo').onclick = Admin.closeModal;
+    $('cYes').onclick = async () => {
+      $('cYes').disabled = true;
+      try {
+        const paid = await Admin.call('/api/admin/commission-close', { method: 'POST', body: { barberId: barber.id } });
+        Admin.closeModal();
+        BS.toast(`Pagamento de ${brl(paid.amount)} registrado. Contagem de ${first} zerada.`);
+        reload(barber);
+      } catch (err) {
+        $('cYes').disabled = false;
+        BS.toast(err.message, 'error');
+      }
+    };
+  }
+
   $('commList').addEventListener('click', (e) => {
+    const closeBtn = e.target.closest('[data-close]');
+    if (closeBtn) {
+      const barber = barberOf(closeBtn);
+      if (barber && summaries[barber.id]) confirmClose(barber);
+      return;
+    }
     const btn = e.target.closest('[data-kind]');
     const barber = btn && barberOf(btn);
     if (!barber) return;

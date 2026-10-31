@@ -78,6 +78,16 @@ create table if not exists public.login_failures (
 );
 create index if not exists login_failures_at_idx on public.login_failures (at);
 
+-- Aparelhos que ativaram as notificações (Web Push). Só as funções e a Netlify (chave secreta) leem.
+create table if not exists public.push_subscriptions (
+  endpoint   text primary key,
+  staff_id   text not null references public.staff_access (id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+
 -- ----------------------------------------------------------------- dados
 create table if not exists public.bookings (
   id           uuid primary key default gen_random_uuid(),
@@ -109,6 +119,9 @@ update public.bookings set completed_at = (date + time) at time zone 'America/Sa
   where status = 'concluido' and completed_at is null;
 create index if not exists bookings_date_idx on public.bookings (date);
 create index if not exists bookings_series_idx on public.bookings (series_id);
+-- Avisos no celular (função agendada da Netlify): marca o que já foi avisado.
+alter table public.bookings add column if not exists notified_new_at timestamptz;    -- "novo agendamento"
+alter table public.bookings add column if not exists notified_start_at timestamptz;  -- "atendimento agora"
 create index if not exists bookings_phone_idx on public.bookings (phone);
 
 create table if not exists public.blocks (
@@ -627,12 +640,32 @@ end $$;
 -- Quem está logado (pelo token do cabeçalho), ou null.
 create or replace function public.staff_me() returns jsonb
 language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('role', role, 'barberId', barber_id) from _current_staff();
+  select jsonb_build_object('id', id, 'role', role, 'barberId', barber_id) from _current_staff();
 $$;
 
 create or replace function public.staff_logout() returns void
 language sql volatile security definer set search_path = public as $$
   delete from staff_sessions where token_hash = _request_token_hash();
+$$;
+
+-- ----------------------------------------------------------------- notificações no celular
+-- O painel salva o aparelho do barbeiro logado para receber os avisos.
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_staff staff_access;
+begin
+  select * into v_staff from _current_staff();
+  if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  if coalesce(p_endpoint, '') !~ '^https://' or length(p_endpoint) > 1000 or coalesce(p_p256dh, '') = '' or coalesce(p_auth, '') = '' then
+    raise exception using errcode = 'PT400', message = 'Inscrição de notificação inválida.';
+  end if;
+  insert into push_subscriptions (endpoint, staff_id, p256dh, auth) values (p_endpoint, v_staff.id, p_p256dh, p_auth)
+  on conflict (endpoint) do update set staff_id = excluded.staff_id, p256dh = excluded.p256dh, auth = excluded.auth;
+end $$;
+
+create or replace function public.delete_push_subscription(p_endpoint text)
+returns void language sql volatile security definer set search_path = public as $$
+  delete from push_subscriptions where endpoint = p_endpoint and staff_id in (select id from _current_staff());
 $$;
 
 -- Funções internas: ninguém chama direto.
@@ -649,6 +682,8 @@ grant execute on function public.update_booking(uuid, jsonb) to anon, authentica
 grant execute on function public.staff_login(text) to anon, authenticated;
 grant execute on function public.staff_me() to anon, authenticated;
 grant execute on function public.staff_logout() to anon, authenticated;
+grant execute on function public.save_push_subscription(text, text, text) to anon, authenticated;
+grant execute on function public.delete_push_subscription(text) to anon, authenticated;
 
 -- ----------------------------------------------------------------- cadastro inicial
 insert into public.barbers (id, name, role, owner, bio, sort) values

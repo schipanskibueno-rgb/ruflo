@@ -3,6 +3,7 @@
 
 - index.html       -> barbearia-machado.html   (site completo)
 - agendamento.html -> agendamento-machado.html (só agendamento)
+- agendamento.html -> site/index.html          (app publicado na Netlify, com manifest e sw.js)
 
 Uso: python3 build.py
 """
@@ -12,7 +13,11 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PAGES = {"index.html": "barbearia-machado.html", "agendamento.html": "agendamento-machado.html"}
+PAGES = {
+    "barbearia-machado.html": "index.html",
+    "agendamento-machado.html": "agendamento.html",
+    "site/index.html": "agendamento.html",
+}
 REF = re.compile(r"""(?P<q>["'(])(?P<path>img/[\w./-]+\.(?:jpe?g|png|webp|svg))""")
 SOURCE_NOTE = re.compile(r"<!-- (?:Fonte do site|Página só de agendamento[^.]*)\. Rode `python3 build\.py`[^>]*-->")
 
@@ -26,7 +31,7 @@ def inline(match: re.Match) -> str:
     return f"{match.group('q')}data:{mime};base64,{data}"
 
 
-for src, out in PAGES.items():
+for out, src in PAGES.items():
     html = (ROOT / src).read_text(encoding="utf-8")
     html = SOURCE_NOTE.sub(f"<!-- Gerado por build.py — edite {src} e rode o build de novo. -->", html)
     target = ROOT / out

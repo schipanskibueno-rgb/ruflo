@@ -7,6 +7,12 @@
   <meta name="description" content="Barbearia Machado Prime — barbearia em Castro-PR, especialista em prótese capilar. Escolha seu barbeiro e agende online, sem cadastro.">
   <meta name="theme-color" content="#0b0a09">
   <link rel="icon" href="img/favicon.png" type="image/png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Machado">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
@@ -491,6 +497,8 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   .comm-stats .pay { grid-column: 1 / -1; }
 }
 
+#pushBtn.on { border-color: var(--ok); color: var(--ok); }
+
 /* Painel em tema claro: números e dados mais fáceis de ler */
 body.light {
   --bg: #f4f2ee; --bg-2: #ffffff; --card: #ffffff; --card-2: #f2eee8; --line: #e2dbd1;
@@ -570,6 +578,7 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
   <symbol id="i-insta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></symbol>
   <symbol id="i-wa" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.2-.2-.5-.3z"/></symbol>
 </svg>
 
@@ -581,6 +590,7 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
         <a href="https://wa.me/5542999653210" target="_blank" rel="noopener" aria-label="WhatsApp"><svg><use href="#i-wa"/></svg></a>
         <a href="https://www.instagram.com/barbearia_machado_27/" target="_blank" rel="noopener" aria-label="Instagram"><svg><use href="#i-insta"/></svg></a>
         <a href="https://www.google.com/maps/dir/?api=1&amp;destination=R.+Cel.+Oleg%C3%A1rio+de+Macedo,+134,+%C3%81gua+Suja,+Castro+-+PR,+84165-690" target="_blank" rel="noopener" aria-label="Como chegar"><svg><use href="#i-pin"/></svg></a>
+        <a href="#" data-install hidden aria-label="Instalar o app" title="Instalar o app"><svg><use href="#i-download"/></svg></a>
       </nav>
     </header>
 
@@ -727,6 +737,8 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
         </nav>
         <div class="top-actions">
           <span class="who" id="whoLabel"></span>
+          <button class="btn btn-ghost btn-sm" data-install hidden>📲 App</button>
+          <button class="btn btn-ghost btn-sm" id="pushBtn">🔕 Avisos</button>
           <button class="btn btn-red btn-sm" id="newBookingBtn">+ Novo agendamento</button>
           <button class="btn btn-ghost btn-sm" id="logoutBtn">Sair</button>
         </div>
@@ -886,6 +898,14 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
     agendar: 'Agendar horário | Barbearia Machado Prime',
     admin: 'Painel do barbeiro | Barbearia Machado Prime',
   };
+  // App aberto pela tela inicial por um barbeiro já logado: vai direto para o painel.
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let staffToken = '';
+  try { staffToken = localStorage.getItem('machado-staff-token') || ''; } catch { /* modo privado */ }
+  if (standalone && !location.hash && staffToken) history.replaceState(null, '', '#/admin');
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* arquivo único fora da Netlify: sem app */ });
+  }
   const view = location.hash.startsWith('#/admin') ? 'admin' : 'agendar';
   for (const name of Object.keys(views)) document.getElementById('view-' + name).hidden = name !== view;
   document.title = views[view];
@@ -1042,6 +1062,8 @@ const BS = (() => {
   // A chave publishable ("anon public") pode ficar no site; as regras do banco protegem os dados.
   const SUPABASE_URL = 'https://uvdieiiydisobkzoupoj.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_1EY6IdOz6mLqrmvEizcg3w_sC6gLfP_';
+  // Chave pública das notificações (VAPID). A privada fica só na Netlify (VAPID_PRIVATE_KEY).
+  const VAPID_PUBLIC_KEY = 'BG8u4_LvZq9LiICL_QhNsqHjZa4AK9FEEGZYptzZqEUeVLolWmb3g74RhYL0D7PsKMBNL690LrtpimgMPaZX37s';
 
   const SITE = {
     name: 'Barbearia Machado Prime',
@@ -1260,6 +1282,14 @@ const BS = (() => {
         p_name: body.name, p_phone: body.phone, p_notes: body.notes || '', p_repeat: Boolean(body.repeat),
       })));
     }
+    if (m === 'POST' && p === '/api/admin/push-subscribe') {
+      check(await sb.rpc('save_push_subscription', { p_endpoint: body.endpoint, p_p256dh: body.p256dh, p_auth: body.auth }));
+      return { ok: true };
+    }
+    if (m === 'POST' && p === '/api/admin/push-unsubscribe') {
+      check(await sb.rpc('delete_push_subscription', { p_endpoint: body.endpoint }));
+      return { ok: true };
+    }
     if (m === 'POST' && p === '/api/admin/series-cancel') {
       return { cancelled: check(await sb.rpc('cancel_series', { p_series: body.seriesId, p_from: body.from })) };
     }
@@ -1345,6 +1375,8 @@ const BS = (() => {
   BS.api = api;
   BS.config = () => api('/api/config');
   // Link de agendamento para mensagens de WhatsApp (só quando o arquivo está publicado num site).
+  BS.staffToken = readToken;
+  BS.vapidPublicKey = VAPID_PUBLIC_KEY;
   BS.bookingLine = () => (location.protocol.startsWith('http') ? ` Ou agende pelo site: ${location.href.split('#')[0]}` : '');
 })();
 </script>
@@ -2032,6 +2064,7 @@ const Admin = (() => {
       pw.type = pw.type === 'password' ? 'text' : 'password';
     });
     $('logoutBtn').addEventListener('click', async () => {
+      if (BS.onLogout) await BS.onLogout().catch(() => {});
       await api('/api/admin/logout', { method: 'POST', body: {} }).catch(() => {});
       showLogin();
     });
@@ -2758,6 +2791,134 @@ const Admin = (() => {
   });
 
   Admin.register('comissoes', load);
+})();
+</script>
+
+<script>/* app.js */
+/* App instalável (tela inicial) e avisos no celular do barbeiro (Web Push). */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const published = location.protocol === 'https:' || location.hostname === 'localhost';
+  const IOS_STEPS = 'No iPhone: abra este site no Safari, toque em Compartilhar (□↑) e depois em “Adicionar à Tela de Início”.';
+
+  // ------------------------------------------------------------ instalar
+  let installEvent = null;
+  const showInstall = () => { for (const el of document.querySelectorAll('[data-install]')) el.hidden = standalone || !published; };
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installEvent = e;
+    showInstall();
+  });
+  if (isIOS) showInstall();
+  window.addEventListener('appinstalled', () => { for (const el of document.querySelectorAll('[data-install]')) el.hidden = true; });
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-install]');
+    if (!btn) return;
+    e.preventDefault();
+    if (installEvent) {
+      installEvent.prompt();
+      await installEvent.userChoice.catch(() => {});
+      installEvent = null;
+    } else {
+      window.alert(IOS_STEPS);
+    }
+  });
+
+  if (window.CURRENT_VIEW !== 'admin') return;
+
+  // ------------------------------------------------------------ avisos
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const keyBytes = (b64) => {
+    const raw = atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  };
+  async function registration() {
+    return (await navigator.serviceWorker.getRegistration()) || navigator.serviceWorker.register('sw.js');
+  }
+  async function currentSub() {
+    if (!supported || !published) return null;
+    const reg = await navigator.serviceWorker.getRegistration();
+    return reg ? reg.pushManager.getSubscription() : null;
+  }
+  async function refreshBtn() {
+    const sub = await currentSub().catch(() => null);
+    $('pushBtn').textContent = sub ? '🔔 Avisos' : '🔕 Avisos';
+    $('pushBtn').title = sub ? 'Avisos ativos neste aparelho' : 'Ativar avisos neste aparelho';
+    $('pushBtn').classList.toggle('on', Boolean(sub));
+  }
+
+  async function sendTest() {
+    const res = await fetch('/.netlify/functions/push-test', { method: 'POST', headers: { 'x-staff-token': BS.staffToken() } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Não foi possível enviar o teste.');
+    BS.toast('Teste enviado. Deve chegar em alguns segundos.');
+  }
+
+  async function enable() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      BS.toast('Permita as notificações para este site nas configurações do celular.', 'warn');
+      return;
+    }
+    const reg = await registration();
+    await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(BS.vapidPublicKey) });
+    const j = sub.toJSON();
+    await Admin.call('/api/admin/push-subscribe', { method: 'POST', body: { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth } });
+    await refreshBtn();
+    BS.toast('Avisos ativados neste aparelho.');
+    sendTest().catch((err) => BS.toast(err.message, 'warn'));
+  }
+
+  async function disable(sub) {
+    await Admin.call('/api/admin/push-unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } }).catch(() => {});
+    await sub.unsubscribe().catch(() => {});
+    await refreshBtn();
+  }
+
+  $('pushBtn').addEventListener('click', async () => {
+    try {
+      if (!published) {
+        BS.toast('Os avisos funcionam no site publicado na Netlify.', 'warn');
+        return;
+      }
+      if (!supported) {
+        Admin.openModal(`<h2>🔔 Avisos no celular</h2>
+          <p>${isIOS && !standalone ? `${IOS_STEPS} Depois abra o app pela tela inicial e toque em 🔕 Avisos.` : 'Este navegador não aceita notificações. Use o Chrome no Android ou o app instalado no iPhone.'}</p>
+          <div class="modal-actions"><button class="btn btn-red" id="pOk">Entendi</button></div>`);
+        $('pOk').onclick = Admin.closeModal;
+        return;
+      }
+      const sub = await currentSub();
+      if (!sub) {
+        await enable();
+        return;
+      }
+      Admin.openModal(`<h2>🔔 Avisos ativos</h2>
+        <p class="muted">Este aparelho recebe: atendimento começando (5 min antes) e novos agendamentos.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="pOff">Desativar</button>
+          <button class="btn btn-red" id="pTest">Enviar teste</button>
+        </div>`);
+      $('pTest').onclick = () => sendTest().catch((err) => BS.toast(err.message, 'error'));
+      $('pOff').onclick = async () => {
+        await disable(sub);
+        Admin.closeModal();
+        BS.toast('Avisos desativados neste aparelho.');
+      };
+    } catch (err) {
+      BS.toast(err.message || 'Não foi possível ativar os avisos.', 'error');
+    }
+  });
+
+  // Ao sair do painel, este aparelho para de receber os avisos dessa pessoa.
+  BS.onLogout = async () => {
+    const sub = await currentSub();
+    if (sub) await disable(sub);
+  };
+  refreshBtn();
 })();
 </script>
 </body>

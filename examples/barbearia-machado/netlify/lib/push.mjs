@@ -67,9 +67,47 @@ const dayLabel = (iso) => {
  * e avisa barbeiro + dono de cada agendamento novo feito pelo site.
  * Cada agendamento é "reservado" com um PATCH antes do envio, então nunca é avisado duas vezes.
  */
+/**
+ * Mensalidade do sistema: lembra o dono no celular, mais vezes perto do dia 10
+ * (9h todo dia; também 15h faltando 2 dias ou menos; também 19h no último dia).
+ */
+export async function billingReminders(local) {
+  const [pending] = await db('billing_invoices?select=*&status=in.(open,uncollectible)&order=deadline.asc&limit=1');
+  if (!pending) return 0;
+  const hour = Math.floor(local.minutes / 60);
+  const daysLeft = Math.round((Date.parse(pending.deadline) - Date.parse(local.date)) / 86400000);
+  const blocked = daysLeft < 0 && (await db('rpc/system_blocked', { method: 'POST', body: {} }));
+  if (daysLeft < 0 && !blocked) return 0; // liberado manualmente
+  const slots = [[hour >= 9, 'manha'], [daysLeft <= 2 && hour >= 15, 'tarde'], [daysLeft <= 0 && hour >= 19, 'noite']]
+    .filter(([due]) => due).map(([, slot]) => slot);
+  if (!slots.length) return 0;
+  const owners = (await db('staff_access?select=id&role=eq.admin')).map((s) => s.id);
+  if (!owners.length) return 0;
+  const subs = await db(`push_subscriptions?select=*&staff_id=in.(${owners.map(encodeURIComponent).join(',')})`);
+  const value = Number(pending.amount_due).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const [, mm, dd] = pending.deadline.split('-');
+  const payload = blocked
+    ? { title: '⛔ Sistema suspenso', body: `Pague a mensalidade (${value}) para voltar a receber agendamentos.` }
+    : daysLeft === 0
+      ? { title: '🚨 Hoje é o último dia', body: `Pague a mensalidade do sistema (${value}) até hoje para não suspender.` }
+      : daysLeft <= 2
+        ? { title: `⚠️ Faltam ${daysLeft} dia(s)`, body: `Mensalidade do sistema: ${value} · vence ${dd}/${mm}.` }
+        : { title: '💳 Mensalidade do sistema', body: `Disponível para pagamento: ${value} · vence ${dd}/${mm}.` };
+  // Reserva todos os horários vencidos, mas manda um aviso só (sem dois iguais seguidos).
+  let claimed = false;
+  for (const slot of slots) {
+    if (await db('rpc/claim_billing_reminder', { method: 'POST', body: { p_slot: slot } })) claimed = true;
+  }
+  return claimed ? sendTo(subs, { ...payload, tag: 'mensalidade', url: './#/admin' }) : 0;
+}
+
 export async function runNotify(now = new Date()) {
   const local = localNow(now);
   const stamp = now.toISOString();
+  const billing = await billingReminders(local).catch((err) => {
+    console.error('lembrete da mensalidade falhou', err.message);
+    return 0;
+  });
   const starts = await db(
     `bookings?select=*&status=eq.agendado&date=eq.${local.date}&time=gte.${hhmm(Math.max(0, local.minutes - 5))}&time=lte.${hhmm(local.minutes + 5)}&notified_start_at=is.null`,
     { method: 'PATCH', body: { notified_start_at: stamp } },
@@ -78,7 +116,7 @@ export async function runNotify(now = new Date()) {
     `bookings?select=*&source=eq.site&notified_new_at=is.null&created_at=gte.${encodeURIComponent(new Date(now - 15 * 60000).toISOString())}`,
     { method: 'PATCH', body: { notified_new_at: stamp } },
   );
-  if (!starts.length && !fresh.length) return { starts: 0, fresh: 0, sent: 0 };
+  if (!starts.length && !fresh.length) return { starts: 0, fresh: 0, sent: billing };
 
   const [staff, subs] = await Promise.all([db('staff_access?select=id,role,barber_id'), db('push_subscriptions?select=*')]);
   const byId = Object.fromEntries(staff.map((s) => [s.id, s]));
@@ -87,7 +125,7 @@ export async function runNotify(now = new Date()) {
     return who && (who.barber_id === barberId || (withOwner && who.role === 'admin'));
   });
 
-  let sent = 0;
+  let sent = billing;
   for (const b of starts) {
     const end = hhmm(toMin(b.time) + b.duration);
     sent += await sendTo(to(b.barber_id, false), {

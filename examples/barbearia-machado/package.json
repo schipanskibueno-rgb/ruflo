@@ -2,10 +2,13 @@
   "name": "barbearia-machado",
   "version": "1.0.0",
   "private": true,
-  "description": "Agendamento da Barbearia Machado: app instalável e funções da Netlify (notificações).",
+  "description": "Agendamento da Barbearia Machado: app instalável e funções da Netlify (notificações e mensalidade no Stripe).",
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "stripe": "17.7.0"
   }
 }

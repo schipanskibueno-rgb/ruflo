@@ -88,6 +88,36 @@ create table if not exists public.push_subscriptions (
 );
 alter table public.push_subscriptions enable row level security;
 
+-- ----------------------------------------------------------------- mensalidade do sistema (Stripe)
+-- Faturas da mensalidade, sincronizadas pelo webhook do Stripe (função da Netlify, chave secreta).
+create table if not exists public.billing_invoices (
+  id         text primary key,          -- id da fatura no Stripe (in_...)
+  status     text not null,             -- open | paid | void | uncollectible
+  amount_due numeric(10, 2) not null default 0,
+  currency   text not null default 'brl',
+  number     text,
+  hosted_url text,                      -- página de pagamento do Stripe (boleto/Pix/cartão)
+  deadline   date not null,             -- dia 10: depois dele o sistema bloqueia
+  paid_at    timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- Liberação manual (só o desenvolvedor, pelo Table Editor do Supabase): release_until = data limite.
+create table if not exists public.billing_settings (
+  id            int primary key default 1 check (id = 1),
+  release_until date
+);
+insert into public.billing_settings (id) values (1) on conflict (id) do nothing;
+-- Lembretes já enviados no celular do dono (um por dia e horário).
+create table if not exists public.billing_reminders (
+  day  date not null,
+  slot text not null,
+  primary key (day, slot)
+);
+alter table public.billing_invoices  enable row level security;
+alter table public.billing_settings  enable row level security;
+alter table public.billing_reminders enable row level security;
+
 -- ----------------------------------------------------------------- dados
 create table if not exists public.bookings (
   id           uuid primary key default gen_random_uuid(),
@@ -253,6 +283,55 @@ create policy "leitura publica" on public.gallery for select using (true);
 create policy "equipe envia" on public.gallery for insert with check (is_staff());
 create policy "equipe remove" on public.gallery for delete using (is_staff());
 
+-- ----------------------------------------------------------------- mensalidade: bloqueio
+-- Fatura em aberto mais antiga (a que precisa ser paga).
+create or replace function public._billing_pending() returns setof public.billing_invoices
+language sql stable security definer set search_path = public as $$
+  select * from billing_invoices where status in ('open', 'uncollectible') order by deadline, created_at limit 1;
+$$;
+
+-- Bloqueado: fatura em aberto com o dia 10 já vencido, sem liberação manual em vigor.
+create or replace function public.system_blocked() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from _billing_pending() p where p.deadline < (now() at time zone 'America/Sao_Paulo')::date)
+     and not coalesce((select release_until >= (now() at time zone 'America/Sao_Paulo')::date from billing_settings where id = 1), false);
+$$;
+
+-- Para a página do cliente: só diz se o agendamento está suspenso.
+create or replace function public.system_status() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('blocked', system_blocked());
+$$;
+
+-- Para o painel: o dono vê a fatura e o prazo; os barbeiros só se está suspenso.
+create or replace function public.billing_status() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when is_admin() then jsonb_build_object(
+      'blocked', system_blocked(),
+      'releaseUntil', (select release_until from billing_settings where id = 1),
+      'today', to_char((now() at time zone 'America/Sao_Paulo')::date, 'YYYY-MM-DD'),
+      'pending', (select jsonb_build_object('id', p.id, 'amount', p.amount_due, 'number', p.number, 'hostedUrl', p.hosted_url,
+                    'deadline', to_char(p.deadline, 'YYYY-MM-DD'),
+                    'daysLeft', p.deadline - (now() at time zone 'America/Sao_Paulo')::date) from _billing_pending() p))
+    else jsonb_build_object('blocked', system_blocked()) end;
+$$;
+
+create or replace function public._require_active(p_message text default 'Sistema suspenso: a mensalidade está em atraso.')
+returns void language plpgsql stable security definer set search_path = public as $$
+begin
+  if system_blocked() then raise exception using errcode = 'PT423', message = p_message; end if;
+end $$;
+
+-- Notificação do dono: reserva o lembrete do dia/horário (só a Netlify, com a chave secreta).
+create or replace function public.claim_billing_reminder(p_slot text) returns boolean
+language plpgsql volatile security definer set search_path = public as $$
+begin
+  insert into billing_reminders (day, slot) values ((now() at time zone 'America/Sao_Paulo')::date, p_slot);
+  return true;
+exception when unique_violation then
+  return false;
+end $$;
+
 -- ----------------------------------------------------------------- funções da agenda
 create or replace function public._minutes(t time) returns int
 language sql immutable as $$ select (extract(epoch from t) / 60)::int $$;
@@ -371,6 +450,7 @@ declare
   v_dates   jsonb := '[]';
   v_skipped jsonb := '[]';
 begin
+  perform _require_active('Agendamento temporariamente indisponível. Fale com a barbearia pelo WhatsApp.');
   select * into v_staff from _current_staff();
   select * into v_service from services where id = p_service and active;
   if not found then raise exception using errcode = 'PT400', message = 'Serviço inválido.'; end if;
@@ -471,6 +551,7 @@ declare
 begin
   select * into v_staff from _current_staff();
   if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  perform _require_active();
   select * into b from bookings where id = p_id for update;
   if not found then raise exception using errcode = 'PT404', message = 'Agendamento não encontrado.'; end if;
   if v_staff.role = 'barber' and b.barber_id <> v_staff.barber_id then
@@ -539,6 +620,7 @@ declare
   v_staff staff_access;
   v_n     int;
 begin
+  perform _require_active();
   select * into v_staff from _current_staff();
   if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
   update bookings set status = 'cancelado',
@@ -594,6 +676,7 @@ declare
   v_row payouts;
 begin
   if not is_admin() then raise exception using errcode = 'PT403', message = 'Só o dono pode zerar as comissões.'; end if;
+  perform _require_active();
   perform pg_advisory_xact_lock(hashtext('payout:' || p_barber));
   v_sum := _commission_summary(p_barber);
   if (v_sum ->> 'count')::int = 0 then
@@ -684,6 +767,11 @@ grant execute on function public.staff_me() to anon, authenticated;
 grant execute on function public.staff_logout() to anon, authenticated;
 grant execute on function public.save_push_subscription(text, text, text) to anon, authenticated;
 grant execute on function public.delete_push_subscription(text) to anon, authenticated;
+grant execute on function public.system_status() to anon, authenticated;
+grant execute on function public.billing_status() to anon, authenticated;
+revoke execute on function public.claim_billing_reminder(text) from public, anon, authenticated;
+revoke execute on function public._require_active(text) from public, anon, authenticated;
+revoke execute on function public._billing_pending() from public, anon, authenticated;
 
 -- ----------------------------------------------------------------- cadastro inicial
 insert into public.barbers (id, name, role, owner, bio, sort) values

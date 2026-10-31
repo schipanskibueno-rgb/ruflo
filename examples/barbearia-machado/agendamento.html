@@ -499,6 +499,27 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 
 #pushBtn.on { border-color: var(--ok); color: var(--ok); }
 
+/* mensalidade do sistema */
+.bill-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; padding: 12px 16px; border-radius: 12px; font-size: .92rem; border: 1px solid; }
+.bill-bar.info { background: #eef4ff; border-color: #c9d9fb; color: #1e3f8a; }
+.bill-bar.warn { background: #fff4e0; border-color: #f0c98a; color: #7a4f00; }
+.bill-bar.urgent, .bill-bar.last { background: #fde8e6; border-color: #f2a59d; color: #8f1d16; font-weight: 600; }
+.bill-bar .btn { padding: 7px 14px; }
+.bill-bar button.x { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; opacity: .7; }
+.bill-overlay { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 16px; background: rgba(28, 25, 22, .55); backdrop-filter: blur(3px); }
+.bill-overlay.full { background: rgba(28, 25, 22, .92); }
+.bill-box { width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto; background: #fff; color: #1c1916; border-radius: 18px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); border-top: 6px solid #2c5fc4; }
+.bill-box.warn { border-top-color: #e6a23c; }
+.bill-box.urgent, .bill-box.last, .bill-box.blocked { border-top-color: #d42a24; }
+.bill-box h2 { font-size: 1.5rem; text-transform: uppercase; margin: 0 0 6px; }
+.bill-box .amount { font: 700 2.2rem/1.2 var(--font-head); color: #c0231d; margin: 8px 0; }
+.bill-box p { color: #6a6158; margin: 0 0 10px; }
+.bill-box .count { display: inline-block; background: #d42a24; color: #fff; border-radius: 999px; padding: 4px 12px; font-weight: 700; font-size: .85rem; margin-bottom: 8px; }
+.bill-box .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.bill-box .actions .btn { flex: 1 1 auto; }
+#billPayment { margin-top: 14px; }
+.bill-box .form-error { min-height: 0; }
+
 /* Painel em tema claro: números e dados mais fáceis de ler */
 body.light {
   --bg: #f4f2ee; --bg-2: #ffffff; --card: #ffffff; --card-2: #f2eee8; --line: #e2dbd1;
@@ -1142,7 +1163,8 @@ const BS = (() => {
       sb.from('barbers').select('*').eq('active', true).order('sort'),
       sb.from('services').select('*').eq('active', true).order('sort'),
       sb.from('business_hours').select('*'),
-    ]).then(([barbers, services, hours]) => {
+      sb.rpc('system_status'),
+    ]).then(([barbers, services, hours, status]) => {
       const list = check(services).map((s) => ({
         id: s.id, cat: s.cat, name: s.name, price: Number(s.price), duration: s.duration, desc: s.description, tag: s.tag,
       }));
@@ -1152,6 +1174,7 @@ const BS = (() => {
         services: list,
         categories: [...new Set(list.map((s) => s.cat))],
         hours: Object.fromEntries(check(hours).map((h) => [h.weekday, [h.open_time.slice(0, 5), h.close_time.slice(0, 5)]])),
+        blocked: Boolean(status && !status.error && status.data && status.data.blocked),
       };
     }).catch((err) => {
       cfgPromise = null;
@@ -1279,6 +1302,11 @@ const BS = (() => {
         p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
         p_name: body.name, p_phone: body.phone, p_notes: body.notes || '', p_repeat: Boolean(body.repeat),
       })));
+    }
+    if (m === 'GET' && p === '/api/admin/billing-status') {
+      const r = check(await sb.rpc('billing_status'));
+      if (r.pending) r.pending.amount = Number(r.pending.amount);
+      return r;
     }
     if (m === 'POST' && p === '/api/admin/push-subscribe') {
       check(await sb.rpc('save_push_subscription', { p_endpoint: body.endpoint, p_p256dh: body.p256dh, p_auth: body.auth }));
@@ -1424,6 +1452,14 @@ const BS = (() => {
     const go = e.target.closest('[data-go]');
     if (go) goTo(Number(go.dataset.go));
   });
+
+  if (cfg.blocked) {
+    $('stepper').hidden = true;
+    document.querySelector('.booking-main').innerHTML = `<div class="slots-empty">
+      <strong style="display:block;font-size:1.1rem;color:var(--text);margin-bottom:6px">Agendamento online indisponível no momento</strong>
+      Fale com a barbearia pelo WhatsApp <a href="${esc(BS.waLink(cfg.phone))}" target="_blank" rel="noopener">${esc(cfg.phoneDisplay)}</a>.</div>`;
+    return;
+  }
 
   // -------------------------------------------------------------- barbeiros
   $('barberOptions').innerHTML = cfg.barbers.map((b) => `
@@ -1783,6 +1819,7 @@ const Admin = (() => {
       $('whoLabel').innerHTML = `Olá, <strong>${esc(firstName(barberName(state.barber)))}</strong>`;
     }
     switchTab('painel');
+    if (BS.onAdminReady) BS.onAdminReady();
   }
 
   function switchTab(tab) {
@@ -2788,6 +2825,201 @@ const Admin = (() => {
   });
 
   Admin.register('comissoes', load);
+})();
+</script>
+
+<script>/* mensalidade.js */
+/* Mensalidade do sistema (Stripe): avisos que crescem até o dia 10, pagamento no próprio painel e bloqueio. */
+(() => {
+  if (window.CURRENT_VIEW !== 'admin') return;
+  // Chave publicável do Stripe (pode ficar no site). A secreta fica só na Netlify (STRIPE_SECRET_KEY).
+  const STRIPE_PUBLISHABLE_KEY = 'pk_test_51UVGaIFbFx8i9T9beN2az0LThtD9adGpXviPAEtnJWNnMlXWiTMMODs6vVVGiEwSnjl7XMhpo2f3RNox2rctHRPV00SpO24n08';
+  const { esc, brl } = BS;
+  const $ = (id) => document.getElementById(id);
+  const DISMISS_KEY = 'machado-mensalidade-fechada';
+  let status = null;
+  let shownWarn = false;
+
+  const level = (st) => {
+    if (!st) return null;
+    if (st.blocked) return 'blocked';
+    if (!st.pending) return null;
+    const d = st.pending.daysLeft;
+    return d <= 0 ? 'last' : d <= 2 ? 'urgent' : d <= 5 ? 'warn' : 'info';
+  };
+  const ddmm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+
+  function clear() {
+    document.querySelector('.bill-bar')?.remove();
+    document.querySelector('.bill-overlay')?.remove();
+  }
+
+  function render() {
+    clear();
+    if (!status) return;
+    if (status.blocked && !Admin.isOwner()) {
+      overlay('blocked', `<h2>⛔ Sistema suspenso</h2><p>O agendamento e o painel estão pausados. Fale com o Adão.</p>`, false);
+      return;
+    }
+    if (!Admin.isOwner() || !status.pending) return;
+    const p = status.pending;
+    const lv = level(status);
+    const msg = {
+      info: `💳 Mensalidade do sistema disponível · <b>${brl(p.amount)}</b> · vence ${ddmm(p.deadline)}`,
+      warn: `💳 Mensalidade vence em <b>${p.daysLeft} dias</b> (${ddmm(p.deadline)}) · ${brl(p.amount)}`,
+      urgent: `⚠️ Faltam <b>${p.daysLeft} dia(s)</b> para pagar a mensalidade · ${brl(p.amount)}`,
+      last: '🚨 <b>Hoje é o último dia</b> para pagar a mensalidade do sistema',
+      blocked: '',
+    }[lv];
+    const dismissed = lv === 'info' && BS.storage.get(DISMISS_KEY) === status.today;
+    if (lv !== 'blocked' && !dismissed) {
+      const bar = document.createElement('div');
+      bar.className = `bill-bar ${lv}`;
+      bar.innerHTML = `<span>${msg}</span><span><button class="btn btn-red btn-sm" data-bill-pay>Pagar agora</button>${lv === 'info' ? ' <button class="x" data-bill-dismiss aria-label="Fechar por hoje">✕</button>' : ''}</span>`;
+      document.querySelector('.admin-main').prepend(bar);
+    }
+    // Janela: abre sozinha do dia 5 em diante; nos últimos dias reabre a cada verificação.
+    if (lv === 'warn' && !shownWarn) {
+      shownWarn = true;
+      payWindow(lv, true);
+    } else if (lv === 'urgent' || lv === 'last') {
+      payWindow(lv, true);
+    } else if (lv === 'blocked') {
+      payWindow(lv, false);
+    }
+  }
+
+  function overlay(lv, html, closable) {
+    document.querySelector('.bill-overlay')?.remove();
+    const el = document.createElement('div');
+    el.className = `bill-overlay${lv === 'last' || lv === 'blocked' ? ' full' : ''}`;
+    el.innerHTML = `<div class="bill-box ${lv}" role="dialog" aria-modal="true">${html}</div>`;
+    document.body.appendChild(el);
+    if (closable) el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-bill-close]')) el.remove(); });
+    return el;
+  }
+
+  function payWindow(lv, closable) {
+    const p = status.pending;
+    const head = {
+      info: '<h2>💳 Mensalidade do sistema</h2>',
+      warn: `<h2>💳 Mensalidade do sistema</h2><span class="count">Vence em ${p.daysLeft} dias</span>`,
+      urgent: `<h2>⚠️ Faltam ${p.daysLeft} dia(s)</h2><span class="count">Vence ${ddmm(p.deadline)}</span>`,
+      last: '<h2>🚨 Último dia</h2><span class="count">Vence hoje</span>',
+      blocked: '<h2>⛔ Sistema suspenso</h2>',
+    }[lv];
+    const note = lv === 'blocked'
+      ? `A mensalidade venceu em ${ddmm(p.deadline)}. Pague para liberar o agendamento e o painel na hora.`
+      : lv === 'last' ? 'Depois de hoje o agendamento e o painel ficam suspensos até o pagamento.'
+        : `Pagamento até ${ddmm(p.deadline)}.`;
+    overlay(lv, `${head}
+      <div class="amount">${brl(p.amount)}</div>
+      <p>${note}${p.number ? ` · Fatura ${esc(p.number)}` : ''}</p>
+      <div id="billPayment"></div>
+      <p class="form-error" id="billErr"></p>
+      <div class="actions">
+        ${closable ? '<button class="btn btn-ghost" data-bill-close>Depois</button>' : ''}
+        <button class="btn btn-red" id="billPayBtn">Pagar agora</button>
+      </div>
+      ${p.hostedUrl ? `<p class="small" style="margin-top:12px"><a href="${esc(p.hostedUrl)}" target="_blank" rel="noopener">Abrir a fatura (boleto, Pix ou cartão) ↗</a></p>` : ''}`, closable);
+    $('billPayBtn').onclick = startPayment;
+  }
+
+  let stripeJs;
+  function loadStripe() {
+    stripeJs ||= new Promise((resolve, reject) => {
+      if (window.Stripe) return resolve(window.Stripe(STRIPE_PUBLISHABLE_KEY));
+      const sc = document.createElement('script');
+      sc.src = 'https://js.stripe.com/v3/';
+      sc.onload = () => resolve(window.Stripe(STRIPE_PUBLISHABLE_KEY));
+      sc.onerror = () => { stripeJs = null; reject(new Error('Não foi possível carregar o Stripe. Verifique a internet.')); };
+      document.head.appendChild(sc);
+    });
+    return stripeJs;
+  }
+
+  async function startPayment() {
+    const btn = $('billPayBtn');
+    const err = $('billErr');
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Carregando…';
+    try {
+      const res = await fetch('/.netlify/functions/billing-pay', { method: 'POST', headers: { 'x-staff-token': BS.staffToken() } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Não foi possível abrir o pagamento.');
+      if (data.paid) return waitUntilPaid();
+      if (!data.clientSecret) {
+        if (data.hostedUrl) window.open(data.hostedUrl, '_blank', 'noopener');
+        throw new Error('Pague pela página da fatura que abriu. O sistema libera assim que o pagamento cair.');
+      }
+      const stripe = await loadStripe();
+      const elements = stripe.elements({ clientSecret: data.clientSecret, locale: 'pt-BR', appearance: { theme: 'stripe', variables: { colorPrimary: '#d42a24' } } });
+      elements.create('payment', { layout: 'tabs' }).mount('#billPayment');
+      btn.disabled = false;
+      btn.textContent = `Pagar ${brl(data.amount)}`;
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Processando…';
+        const { error } = await stripe.confirmPayment({
+          elements, redirect: 'if_required', confirmParams: { return_url: `${location.href.split('#')[0]}#/admin` },
+        });
+        if (error) {
+          err.textContent = error.message || 'Pagamento não concluído.';
+          btn.disabled = false;
+          btn.textContent = `Pagar ${brl(data.amount)}`;
+          return;
+        }
+        waitUntilPaid();
+      };
+    } catch (e) {
+      err.textContent = e.message;
+      btn.disabled = false;
+      btn.textContent = 'Pagar agora';
+    }
+  }
+
+  /** O Stripe avisa a Netlify (webhook); aqui só espera o sistema ser liberado. */
+  async function waitUntilPaid() {
+    const box = document.querySelector('.bill-box');
+    if (box) box.innerHTML = '<h2>✓ Pagamento recebido</h2><p>Liberando o sistema…</p>';
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const st = await Admin.call('/api/admin/billing-status').catch(() => null);
+      if (st && !st.pending && !st.blocked) {
+        status = st;
+        render();
+        BS.toast('Mensalidade paga. Obrigado!');
+        Admin.refresh();
+        return;
+      }
+    }
+    if (box) box.innerHTML = '<h2>Quase lá</h2><p>O pagamento está sendo confirmado (Pix e boleto podem levar alguns minutos). A janela some sozinha quando cair.</p><div class="actions"><button class="btn btn-ghost" data-bill-close>Fechar</button></div>';
+    document.querySelector('.bill-overlay')?.addEventListener('click', (e) => { if (e.target.closest('[data-bill-close]')) e.currentTarget.remove(); });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-bill-pay]') && status?.pending) payWindow(level(status), level(status) !== 'blocked');
+    if (e.target.closest('[data-bill-dismiss]')) {
+      BS.storage.set(DISMISS_KEY, status.today);
+      document.querySelector('.bill-bar')?.remove();
+    }
+  });
+
+  async function check() {
+    try {
+      const st = await Admin.call('/api/admin/billing-status');
+      const changed = JSON.stringify(st) !== JSON.stringify(status);
+      status = st;
+      if (changed || ['warn', 'urgent', 'last', 'blocked'].includes(level(st))) render();
+    } catch { /* sem conexão: tenta na próxima */ }
+  }
+  BS.onAdminReady = () => {
+    check();
+    clearInterval(check.timer);
+    check.timer = setInterval(check, 5 * 60 * 1000);
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Admin.state.me) check(); });
 })();
 </script>
 

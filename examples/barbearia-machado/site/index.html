@@ -1062,8 +1062,6 @@ const BS = (() => {
   // A chave publishable ("anon public") pode ficar no site; as regras do banco protegem os dados.
   const SUPABASE_URL = 'https://uvdieiiydisobkzoupoj.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_1EY6IdOz6mLqrmvEizcg3w_sC6gLfP_';
-  // Chave pública das notificações (VAPID). A privada fica só na Netlify (VAPID_PRIVATE_KEY).
-  const VAPID_PUBLIC_KEY = 'BG8u4_LvZq9LiICL_QhNsqHjZa4AK9FEEGZYptzZqEUeVLolWmb3g74RhYL0D7PsKMBNL690LrtpimgMPaZX37s';
 
   const SITE = {
     name: 'Barbearia Machado Prime',
@@ -1376,7 +1374,6 @@ const BS = (() => {
   BS.config = () => api('/api/config');
   // Link de agendamento para mensagens de WhatsApp (só quando o arquivo está publicado num site).
   BS.staffToken = readToken;
-  BS.vapidPublicKey = VAPID_PUBLIC_KEY;
   BS.bookingLine = () => (location.protocol.startsWith('http') ? ` Ou agende pelo site: ${location.href.split('#')[0]}` : '');
 })();
 </script>
@@ -2862,9 +2859,13 @@ const Admin = (() => {
       BS.toast('Permita as notificações para este site nas configurações do celular.', 'warn');
       return;
     }
+    // Chave pública das notificações: vem da Netlify (variável VAPID_PUBLIC_KEY).
+    const keyRes = await fetch('/.netlify/functions/push-key');
+    const { publicKey } = await keyRes.json().catch(() => ({}));
+    if (!keyRes.ok || !publicKey) throw new Error('Avisos ainda não configurados na Netlify (VAPID_PUBLIC_KEY).');
     const reg = await registration();
     await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(BS.vapidPublicKey) });
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });
     const j = sub.toJSON();
     await Admin.call('/api/admin/push-subscribe', { method: 'POST', body: { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth } });
     await refreshBtn();

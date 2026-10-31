@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerar chaves dos avisos</title>
+  <style>
+    :root { --bg: #f4f2ee; --card: #fff; --line: #e2dbd1; --text: #1c1916; --muted: #6a6158; --red: #d42a24; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+    h1 { font-size: 1.6rem; margin: 0 0 6px; }
+    p { color: var(--muted); }
+    button { background: var(--red); color: #fff; border: 0; border-radius: 10px; padding: 12px 20px; font: 600 1rem system-ui, sans-serif; cursor: pointer; }
+    .key { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+    .key b { display: block; margin-bottom: 6px; }
+    .key code { display: block; word-break: break-all; background: var(--bg); border-radius: 8px; padding: 10px; font-size: .9rem; }
+    .key button { margin-top: 8px; padding: 8px 14px; font-size: .9rem; background: #1c1916; }
+    .warn { background: #fff4e0; border: 1px solid #f0c98a; border-radius: 12px; padding: 12px 14px; color: #7a4f00; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Chaves dos avisos (Barbearia Machado)</h1>
+  <p>Gera o par de chaves das notificações aqui no seu navegador. Nada é enviado para a internet.
+    Gere <strong>uma vez</strong> e cole as duas na Netlify (Site configuration → Environment variables).</p>
+  <button id="gen">Gerar chaves</button>
+  <div id="out" hidden>
+    <div class="key"><b>VAPID_PUBLIC_KEY</b><code id="pub"></code><button data-copy="pub">Copiar</button></div>
+    <div class="key"><b>VAPID_PRIVATE_KEY</b><code id="priv"></code><button data-copy="priv">Copiar</button></div>
+    <p class="warn">A chave privada é secreta: cole só na Netlify e não mande para ninguém. Se gerar de novo,
+      troque as duas na Netlify e os barbeiros precisam ativar os avisos de novo (botão 🔕 Avisos).</p>
+  </div>
+</main>
+<script>
+  const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  document.getElementById('gen').addEventListener('click', async () => {
+    if (!crypto.subtle) { alert('Abra este arquivo no Chrome, Edge ou Safari atualizado.'); return; }
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const raw = await crypto.subtle.exportKey('raw', pair.publicKey);
+    const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    document.getElementById('pub').textContent = b64url(raw);
+    document.getElementById('priv').textContent = jwk.d;
+    document.getElementById('out').hidden = false;
+  });
+  document.addEventListener('click', async (e) => {
+    const id = e.target.dataset && e.target.dataset.copy;
+    if (!id) return;
+    await navigator.clipboard.writeText(document.getElementById(id).textContent).catch(() => {});
+    e.target.textContent = 'Copiado ✓';
+    setTimeout(() => { e.target.textContent = 'Copiar'; }, 1500);
+  });
+</script>
+</body>
+</html>

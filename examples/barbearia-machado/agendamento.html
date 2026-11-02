@@ -149,6 +149,21 @@ textarea.input { resize: vertical; min-height: 80px; }
 .quick-links a { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line); color: var(--copper-2); transition: border-color .15s, color .15s; }
 .quick-links a:hover { border-color: var(--red); color: var(--red-2); }
 .quick-links svg { width: 20px; height: 20px; }
+.quick-links .theme-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line); color: var(--copper-2); cursor: pointer; transition: border-color .15s, color .15s; }
+.quick-links .theme-btn:hover { border-color: var(--red); color: var(--red-2); }
+.theme-btn svg { width: 18px; height: 18px; }
+.theme-btn .i-moon, body.light .theme-btn .i-sun { display: none; }
+body.light .theme-btn .i-moon { display: block; }
+.top-actions .theme-btn { display: inline-flex; padding: 8px 10px; }
+@media (max-width: 520px) {
+  .top-actions { gap: 6px; }
+  .top-actions .lbl { display: none; }
+  .top-actions .btn-sm { padding: 8px 10px; }
+  .admin-top .brand-logo { height: 34px; }
+  .admin-top .brand-name b { font-size: 1.1rem; }
+}
+.login-card { position: relative; }
+.login-theme { position: absolute; top: 14px; right: 14px; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); color: var(--copper-2); cursor: pointer; }
 .admin-link { display: block; text-align: center; padding: 0 0 18px; background: #060505; color: #5e5751; font-size: .72rem; }
 .admin-link:hover { color: var(--muted); }
 .booking { padding-top: 28px; padding-bottom: 60px; }
@@ -308,8 +323,12 @@ code { background: var(--card-2); padding: 2px 6px; border-radius: 6px; font-siz
 .top-actions { display: flex; gap: 8px; align-items: center; }
 .top-actions .btn { white-space: nowrap; }
 .admin-top .brand { flex: none; }
-@media (max-width: 1520px) {
+.admin-top .container { max-width: 1440px; }
+@media (max-width: 1700px) {
   .top-actions .who { display: none; }
+}
+@media (max-width: 1440px) {
+  .top-actions .lbl { display: none; }
   .tabs button { padding: 10px 10px; }
 }
 .who { color: var(--muted); font-size: .85rem; white-space: nowrap; }
@@ -504,16 +523,19 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .bill-bar.info { background: #eef4ff; border-color: #c9d9fb; color: #1e3f8a; }
 .bill-bar.warn { background: #fff4e0; border-color: #f0c98a; color: #7a4f00; }
 .bill-bar.urgent, .bill-bar.last { background: #fde8e6; border-color: #f2a59d; color: #8f1d16; font-weight: 600; }
+body:not(.light) .bill-bar.info { background: rgba(91, 141, 239, .12); border-color: rgba(91, 141, 239, .4); color: #b4c8f5; }
+body:not(.light) .bill-bar.warn { background: rgba(230, 162, 60, .12); border-color: rgba(230, 162, 60, .45); color: #f1c27d; }
+body:not(.light) .bill-bar.urgent, body:not(.light) .bill-bar.last { background: rgba(232, 48, 42, .15); border-color: rgba(232, 48, 42, .5); color: #ffb3ad; }
 .bill-bar .btn { padding: 7px 14px; }
 .bill-bar button.x { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; opacity: .7; }
 .bill-overlay { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 16px; background: rgba(28, 25, 22, .55); backdrop-filter: blur(3px); }
 .bill-overlay.full { background: rgba(28, 25, 22, .92); }
-.bill-box { width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto; background: #fff; color: #1c1916; border-radius: 18px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); border-top: 6px solid #2c5fc4; }
+.bill-box { width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto; background: var(--card); color: var(--text); border-radius: 18px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); border-top: 6px solid #2c5fc4; }
 .bill-box.warn { border-top-color: #e6a23c; }
 .bill-box.urgent, .bill-box.last, .bill-box.blocked { border-top-color: #d42a24; }
 .bill-box h2 { font-size: 1.5rem; text-transform: uppercase; margin: 0 0 6px; }
-.bill-box .amount { font: 700 2.2rem/1.2 var(--font-head); color: #c0231d; margin: 8px 0; }
-.bill-box p { color: #6a6158; margin: 0 0 10px; }
+.bill-box .amount { font: 700 2.2rem/1.2 var(--font-head); color: var(--red-2); margin: 8px 0; }
+.bill-box p { color: var(--muted); margin: 0 0 10px; }
 .bill-box .count { display: inline-block; background: #d42a24; color: #fff; border-radius: 999px; padding: 4px 12px; font-weight: 700; font-size: .85rem; margin-bottom: 8px; }
 .bill-box .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .bill-box .actions .btn { flex: 1 1 auto; }
@@ -539,9 +561,16 @@ body.light .top-row .meter { background: var(--card-2); }
 body.light .alert { color: #7a4f00; }
 body.light input[type="date"], body.light input[type="time"] { color-scheme: light; }
 body.light .bk, body.light .client, body.light .block-item, body.light .panel, body.light .kpi, body.light .comm { box-shadow: 0 1px 2px rgba(40, 30, 20, .05); }
-@media (max-width: 1180px) {
+@media (max-width: 1200px) {
   body.light .tabs { background: rgba(255, 255, 255, .98); }
 }
+body.light .logo-head img { width: 190px; filter: drop-shadow(0 12px 24px rgba(40, 30, 20, .2)); }
+body.light .login-logo { width: 130px; border-radius: 50%; }
+body.light .ticket { background: linear-gradient(180deg, #fff4f2, var(--card)); box-shadow: 0 10px 30px rgba(40, 30, 20, .1); }
+body.light .cal-day.other { color: #b0a79c; }
+body.light .cal-day:disabled { color: #d2cac0; }
+body.light .admin-link { background: #ebe6df; color: #8f857b; }
+body.light .booking-main, body.light .calendar { box-shadow: 0 1px 2px rgba(40, 30, 20, .05); }
 
 /* modal */
 .modal { border: 0; padding: 0; background: transparent; color: var(--text); max-width: 560px; width: calc(100% - 24px); }
@@ -556,7 +585,7 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
 .history { font-size: .82rem; color: var(--muted); margin: 0; padding-left: 18px; }
 
-@media (max-width: 1180px) {
+@media (max-width: 1200px) {
   #appView > .credit { padding-bottom: 86px; }
   .grid-2 { grid-template-columns: 1fr; }
   .admin-top { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -574,7 +603,7 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
     font-size: 1.8rem; box-shadow: var(--shadow); cursor: pointer;
   }
 }
-@media (min-width: 1181px) { .fab { display: none; } }
+@media (min-width: 1201px) { .fab { display: none; } }
 @media (max-width: 640px) {
   .bk { grid-template-columns: 60px 1fr; }
   .bk-actions { grid-column: 1 / -1; justify-content: flex-start; }
@@ -599,6 +628,8 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
   <symbol id="i-insta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></symbol>
   <symbol id="i-wa" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.2-.2-.5-.3z"/></symbol>
 </svg>
@@ -606,12 +637,13 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
 <div id="view-agendar" class="view">
   <main class="container booking">
     <header class="logo-head">
-      <img src="img/logo.jpg" alt="Barbearia Machado — Especialista em prótese capilar">
+      <img src="img/logo.jpg" data-light-src="img/logo-badge.webp" alt="Barbearia Machado — Especialista em prótese capilar">
       <nav class="quick-links">
         <a href="https://wa.me/5542999653210" target="_blank" rel="noopener" aria-label="WhatsApp"><svg><use href="#i-wa"/></svg></a>
         <a href="https://www.instagram.com/barbearia_machado_27/" target="_blank" rel="noopener" aria-label="Instagram"><svg><use href="#i-insta"/></svg></a>
         <a href="https://www.google.com/maps/dir/?api=1&amp;destination=R.+Cel.+Oleg%C3%A1rio+de+Macedo,+134,+%C3%81gua+Suja,+Castro+-+PR,+84165-690" target="_blank" rel="noopener" aria-label="Como chegar"><svg><use href="#i-pin"/></svg></a>
         <a href="#" data-install hidden aria-label="Instalar o app" title="Instalar o app"><svg><use href="#i-download"/></svg></a>
+        <button type="button" class="theme-btn" data-theme-toggle aria-label="Mudar tema"><svg class="i-sun"><use href="#i-sun"/></svg><svg class="i-moon"><use href="#i-moon"/></svg></button>
       </nav>
     </header>
 
@@ -724,7 +756,8 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
   <!-- Login -->
   <div id="loginView" class="login-wrap" hidden>
     <form class="login-card" id="loginForm">
-      <img class="login-logo" src="img/logo.jpg" alt="Barbearia Machado">
+      <button type="button" class="theme-btn login-theme" data-theme-toggle aria-label="Mudar tema"><svg class="i-sun"><use href="#i-sun"/></svg><svg class="i-moon"><use href="#i-moon"/></svg></button>
+      <img class="login-logo" src="img/logo.jpg" data-light-src="img/logo-badge.webp" alt="Barbearia Machado">
       <h1>Área do barbeiro</h1>
       <p class="muted">Digite a sua senha.</p>
       <div class="field">
@@ -758,8 +791,9 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
         </nav>
         <div class="top-actions">
           <span class="who" id="whoLabel"></span>
+          <button type="button" class="btn btn-ghost btn-sm theme-btn" data-theme-toggle aria-label="Mudar tema"><svg class="i-sun"><use href="#i-sun"/></svg><svg class="i-moon"><use href="#i-moon"/></svg></button>
           <button class="btn btn-ghost btn-sm" data-install hidden>📲 App</button>
-          <button class="btn btn-ghost btn-sm" id="pushBtn">🔕 Avisos</button>
+          <button class="btn btn-ghost btn-sm" id="pushBtn">🔕<span class="lbl"> Avisos</span></button>
           <button class="btn btn-red btn-sm" id="newBookingBtn">+ Novo agendamento</button>
           <button class="btn btn-ghost btn-sm" id="logoutBtn">Sair</button>
         </div>
@@ -930,7 +964,28 @@ body.light .bk, body.light .client, body.light .block-item, body.light .panel, b
   const view = location.hash.startsWith('#/admin') ? 'admin' : 'agendar';
   for (const name of Object.keys(views)) document.getElementById('view-' + name).hidden = name !== view;
   document.title = views[view];
-  document.body.classList.toggle('light', view === 'admin');
+  // Tema claro/escuro: escolha salva no aparelho; sem escolha, cliente escuro (marca) e painel claro.
+  const THEME_KEY = 'machado-tema';
+  const theme = { get() { try { return localStorage.getItem(THEME_KEY); } catch { return null; } } };
+  const applyTheme = (light) => {
+    document.body.classList.toggle('light', light);
+    document.querySelector('meta[name="theme-color"]').content = light ? '#f4f2ee' : '#0b0a09';
+    for (const img of document.querySelectorAll('img[data-light-src]')) {
+      img.dataset.darkSrc ||= img.getAttribute('src');
+      img.src = light ? img.dataset.lightSrc : img.dataset.darkSrc;
+    }
+    for (const b of document.querySelectorAll('[data-theme-toggle]')) {
+      b.title = light ? 'Usar tema escuro' : 'Usar tema claro';
+      b.setAttribute('aria-label', b.title);
+    }
+  };
+  applyTheme(theme.get() ? theme.get() === 'claro' : view === 'admin');
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-theme-toggle]')) return;
+    const light = !document.body.classList.contains('light');
+    try { localStorage.setItem(THEME_KEY, light ? 'claro' : 'escuro'); } catch { /* modo privado: vale até recarregar */ }
+    applyTheme(light);
+  });
   window.CURRENT_VIEW = view;
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#/"]');
@@ -2954,7 +3009,7 @@ const Admin = (() => {
         throw new Error('Pague pela página da fatura que abriu. O sistema libera assim que o pagamento cair.');
       }
       const stripe = await loadStripe();
-      const elements = stripe.elements({ clientSecret: data.clientSecret, locale: 'pt-BR', appearance: { theme: 'stripe', variables: { colorPrimary: '#d42a24' } } });
+      const elements = stripe.elements({ clientSecret: data.clientSecret, locale: 'pt-BR', appearance: { theme: document.body.classList.contains('light') ? 'stripe' : 'night', variables: { colorPrimary: '#d42a24' } } });
       elements.create('payment', { layout: 'tabs' }).mount('#billPayment');
       btn.disabled = false;
       btn.textContent = `Pagar ${brl(data.amount)}`;
@@ -3073,7 +3128,7 @@ const Admin = (() => {
   }
   async function refreshBtn() {
     const sub = await currentSub().catch(() => null);
-    $('pushBtn').textContent = sub ? '🔔 Avisos' : '🔕 Avisos';
+    $('pushBtn').innerHTML = `${sub ? '🔔' : '🔕'}<span class="lbl"> Avisos</span>`;
     $('pushBtn').title = sub ? 'Avisos ativos neste aparelho' : 'Ativar avisos neste aparelho';
     $('pushBtn').classList.toggle('on', Boolean(sub));
   }

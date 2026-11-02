@@ -118,6 +118,16 @@ alter table public.billing_invoices  enable row level security;
 alter table public.billing_settings  enable row level security;
 alter table public.billing_reminders enable row level security;
 
+-- Segredos internos: chaves dos avisos (geradas sozinhas pela função "machado" no primeiro uso)
+-- e a senha do agendamento a cada minuto. Ninguém lê pela API; só o banco e a função do Supabase.
+create table if not exists public.app_secrets (
+  key   text primary key,
+  value text not null
+);
+alter table public.app_secrets enable row level security;
+insert into public.app_secrets (key, value) values ('cron_secret', encode(extensions.gen_random_bytes(24), 'hex'))
+on conflict (key) do nothing;
+
 -- ----------------------------------------------------------------- dados
 create table if not exists public.bookings (
   id           uuid primary key default gen_random_uuid(),
@@ -821,3 +831,20 @@ insert into public.staff_access (id, role, barber_id, pass_hash) values
   ('nick',    'barber', 'nick',    extensions.crypt('nick26',    extensions.gen_salt('bf'))),
   ('joao',    'barber', 'joao',    extensions.crypt('joao26',    extensions.gen_salt('bf')))
 on conflict (id) do nothing;
+
+-- ----------------------------------------------------------------- avisos a cada minuto
+-- Chama a função "machado" (Supabase → Edge Functions) uma vez por minuto para enviar os avisos.
+-- Se trocar de projeto Supabase, troque o endereço abaixo.
+do $$
+declare
+  v_url text := 'https://uvdieiiydisobkzoupoj.supabase.co/functions/v1/machado/notify';
+begin
+  create extension if not exists pg_net;
+  create extension if not exists pg_cron;
+  perform cron.schedule('machado-avisos', '* * * * *', format(
+    $cmd$select net.http_post(url := %L, body := '{}'::jsonb,
+      headers := jsonb_build_object('Content-Type', 'application/json',
+        'x-cron-secret', (select value from public.app_secrets where key = 'cron_secret')))$cmd$, v_url));
+exception when others then
+  raise warning 'Avisos automáticos não foram agendados (%). No Supabase: Database → Extensions → ative pg_cron e pg_net e rode este arquivo de novo.', sqlerrm;
+end $$;

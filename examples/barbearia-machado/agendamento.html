@@ -1457,6 +1457,10 @@ const BS = (() => {
   BS.config = () => api('/api/config');
   // Link de agendamento para mensagens de WhatsApp (só quando o arquivo está publicado num site).
   BS.staffToken = readToken;
+  // Função "machado" do Supabase (avisos no celular): supabase/functions/machado/index.ts
+  BS.fn = (route, opts = {}) => fetch(`${SUPABASE_URL}/functions/v1/machado/${route}`, {
+    ...opts, headers: { apikey: SUPABASE_ANON_KEY, 'x-staff-token': readToken(), ...(opts.headers || {}) },
+  });
   BS.bookingLine = () => (location.protocol.startsWith('http') ? ` Ou agende pelo site: ${location.href.split('#')[0]}` : '');
 })();
 </script>
@@ -3000,7 +3004,7 @@ const Admin = (() => {
     btn.disabled = true;
     btn.textContent = 'Carregando…';
     try {
-      const res = await fetch('/.netlify/functions/billing-pay', { method: 'POST', headers: { 'x-staff-token': BS.staffToken() } });
+      const res = await BS.fn('billing-pay', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Não foi possível abrir o pagamento.');
       if (data.paid) return waitUntilPaid();
@@ -3134,7 +3138,7 @@ const Admin = (() => {
   }
 
   async function sendTest() {
-    const res = await fetch('/.netlify/functions/push-test', { method: 'POST', headers: { 'x-staff-token': BS.staffToken() } });
+    const res = await BS.fn('push-test', { method: 'POST' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Não foi possível enviar o teste.');
     BS.toast('Teste enviado. Deve chegar em alguns segundos.');
@@ -3146,10 +3150,10 @@ const Admin = (() => {
       BS.toast('Permita as notificações para este site nas configurações do celular.', 'warn');
       return;
     }
-    // Chave pública das notificações: vem da Netlify (variável VAPID_PUBLIC_KEY).
-    const keyRes = await fetch('/.netlify/functions/push-key');
-    const { publicKey } = await keyRes.json().catch(() => ({}));
-    if (!keyRes.ok || !publicKey) throw new Error('Avisos ainda não configurados na Netlify (VAPID_PUBLIC_KEY).');
+    // Chave pública das notificações: a função "machado" do Supabase cria e guarda sozinha.
+    const keyRes = await BS.fn('push-key').catch(() => null);
+    const { publicKey } = (keyRes && (await keyRes.json().catch(() => ({})))) || {};
+    if (!keyRes || !keyRes.ok || !publicKey) throw new Error('A função "machado" ainda não foi publicada no Supabase.');
     const reg = await registration();
     await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });
@@ -3169,7 +3173,7 @@ const Admin = (() => {
   $('pushBtn').addEventListener('click', async () => {
     try {
       if (!published) {
-        BS.toast('Os avisos funcionam no site publicado na Netlify.', 'warn');
+        BS.toast('Os avisos funcionam no site publicado (Netlify), não no arquivo aberto no computador.', 'warn');
         return;
       }
       if (!supported) {

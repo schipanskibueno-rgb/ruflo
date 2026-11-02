@@ -1,0 +1,6 @@
+# Netlify (arrastar a pasta): o navegador sempre busca o service worker e o manifesto novos.
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache

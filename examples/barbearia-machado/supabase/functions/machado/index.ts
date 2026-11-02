@@ -1,11 +1,13 @@
-// Função "machado" do Supabase (Edge Functions): avisos no celular dos barbeiros.
-// Como publicar: Supabase → Edge Functions → Deploy a new function → Via Editor → nome "machado"
-// → cole este arquivo → Deploy. Depois, nos detalhes da função, desligue "Verify JWT".
+// Função do Supabase (Edge Functions): avisos no celular dos barbeiros.
+// Como publicar: Supabase → Edge Functions → Deploy a new function → Via Editor → cole este arquivo
+// → Deploy. Depois, nos detalhes da função, desligue "Verify JWT".
+// Publicada como "quick-task": o nome precisa ser o mesmo de FUNCTION_NAME (agendamento.html)
+// e do endereço no final de supabase/schema.sql.
 //
-// Rotas:
-//   POST /machado/notify     (o banco chama a cada minuto, com a senha interna)
-//   GET  /machado/push-key   (painel: chave pública para ativar os avisos)
-//   POST /machado/push-test  (painel: "Enviar teste" para o barbeiro logado)
+// Rotas (depois do nome da função):
+//   POST /notify     (o banco chama a cada minuto, com a senha interna)
+//   GET  /push-key   (painel: chave pública para ativar os avisos)
+//   POST /push-test  (painel: "Enviar teste" para o barbeiro logado)
 import webpush from 'npm:web-push@3.6.7';
 
 const TZ = 'America/Sao_Paulo';

@@ -1472,8 +1472,10 @@ const BS = (() => {
   BS.config = () => api('/api/config');
   // Link de agendamento para mensagens de WhatsApp (só quando o arquivo está publicado num site).
   BS.staffToken = readToken;
-  // Função "machado" do Supabase (avisos no celular): supabase/functions/machado/index.ts
-  BS.fn = (route, opts = {}) => fetch(`${SUPABASE_URL}/functions/v1/machado/${route}`, {
+  // Função do Supabase que envia os avisos (código em supabase/functions/machado/index.ts).
+  // Use aqui o nome com que ela foi publicada em Supabase → Edge Functions.
+  const FUNCTION_NAME = 'quick-task';
+  BS.fn = (route, opts = {}) => fetch(`${SUPABASE_URL}/functions/v1/${FUNCTION_NAME}/${route}`, {
     ...opts, headers: { apikey: SUPABASE_ANON_KEY, 'x-staff-token': readToken(), ...(opts.headers || {}) },
   });
   BS.bookingLine = () => (location.protocol.startsWith('http') ? ` Ou agende pelo site: ${location.href.split('#')[0]}` : '');
@@ -3165,10 +3167,10 @@ const Admin = (() => {
       BS.toast('Permita as notificações para este site nas configurações do celular.', 'warn');
       return;
     }
-    // Chave pública das notificações: a função "machado" do Supabase cria e guarda sozinha.
+    // Chave pública das notificações: a função do Supabase cria e guarda sozinha.
     const keyRes = await BS.fn('push-key').catch(() => null);
     const { publicKey } = (keyRes && (await keyRes.json().catch(() => ({})))) || {};
-    if (!keyRes || !keyRes.ok || !publicKey) throw new Error('A função "machado" ainda não foi publicada no Supabase.');
+    if (!keyRes || !keyRes.ok || !publicKey) throw new Error('A função dos avisos não respondeu. Confira em Supabase → Edge Functions.');
     const reg = await registration();
     await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });

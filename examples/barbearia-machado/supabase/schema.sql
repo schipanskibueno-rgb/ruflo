@@ -833,11 +833,11 @@ insert into public.staff_access (id, role, barber_id, pass_hash) values
 on conflict (id) do nothing;
 
 -- ----------------------------------------------------------------- avisos a cada minuto
--- Chama a função "machado" (Supabase → Edge Functions) uma vez por minuto para enviar os avisos.
--- Se trocar de projeto Supabase, troque o endereço abaixo.
+-- Chama a função dos avisos (Supabase → Edge Functions) uma vez por minuto.
+-- O final do endereço é o nome com que a função foi publicada; se mudar, troque abaixo e rode de novo.
 do $$
 declare
-  v_url text := 'https://uvdieiiydisobkzoupoj.supabase.co/functions/v1/machado/notify';
+  v_url text := 'https://uvdieiiydisobkzoupoj.supabase.co/functions/v1/quick-task/notify';
 begin
   create extension if not exists pg_net;
   create extension if not exists pg_cron;

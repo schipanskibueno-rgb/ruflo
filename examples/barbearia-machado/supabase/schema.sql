@@ -12,7 +12,9 @@
 --   • Barbeiro (senha própria): vê e gerencia só a própria agenda.
 --
 -- Senhas iniciais do painel (cada pessoa precisa ter uma senha diferente):
---   Adão (dono): machado26 · Emanuel: emanuel26 · Nick: nick26 · João: joao26
+--   Adão (dono): machado26 · Emanuel: emanuel26 · Nick: nick26 · João: joao26 · Ste: ste26
+-- Cada um troca a própria senha no painel (👤 Minha conta) e, se esquecer, recebe um código
+-- no e-mail cadastrado ali (envio pela função do Supabase + Brevo).
 -- Para trocar uma senha, rode no SQL Editor (troque o id e a senha):
 --   update public.staff_access set pass_hash = extensions.crypt('NOVA-SENHA', extensions.gen_salt('bf'))
 --   where id = 'nick';      -- ids: adao, emanuel, nick, joao
@@ -62,6 +64,25 @@ create table if not exists public.staff_access (
   barber_id text references public.barbers (id),
   pass_hash text not null,
   check (role = 'admin' or barber_id is not null)
+);
+
+alter table public.staff_access add column if not exists email text;
+create unique index if not exists staff_access_email_idx on public.staff_access (lower(email));
+
+-- Códigos de "esqueci minha senha" (só o hash; vale 15 minutos e 5 tentativas).
+create table if not exists public.staff_password_resets (
+  id         uuid primary key default gen_random_uuid(),
+  staff_id   text not null references public.staff_access (id) on delete cascade,
+  code_hash  text not null,
+  expires_at timestamptz not null,
+  attempts   int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Mensalidade do sistema (Pix): o dono marcou "já paguei" neste ciclo (ciclo = mês do vencimento, dia 10).
+create table if not exists public.billing_acks (
+  cycle    text primary key check (cycle ~ '^\d{4}-\d{2}$'),
+  acked_at timestamptz not null default now()
 );
 
 -- Sessões do painel: o navegador guarda o token; aqui fica só o hash dele.
@@ -240,6 +261,8 @@ alter table public.services       enable row level security;
 alter table public.business_hours enable row level security;
 alter table public.staff_access   enable row level security;
 alter table public.staff_sessions enable row level security;
+alter table public.staff_password_resets enable row level security;
+alter table public.billing_acks enable row level security;
 alter table public.login_failures enable row level security;
 alter table public.bookings       enable row level security;
 alter table public.blocks         enable row level security;
@@ -350,19 +373,25 @@ create or replace function public._local_now() returns timestamp
 language sql stable as $$ select now() at time zone 'America/Sao_Paulo' $$;
 
 -- Motivo pelo qual o horário não cabe (ou null se cabe).
-create or replace function public._placement_error(p_date date, p_time time, p_duration int, p_barber text, p_exclude uuid)
+-- p_free = marcação pela equipe: qualquer dia e horário (só não pode chocar com outro horário).
+drop function if exists public._placement_error(date, time, int, text, uuid);
+create or replace function public._placement_error(p_date date, p_time time, p_duration int, p_barber text, p_exclude uuid, p_free boolean default false)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare
   h business_hours;
   s int := _minutes(p_time);
   e int := _minutes(p_time) + p_duration;
 begin
-  select * into h from business_hours where weekday = extract(dow from p_date)::int;
-  if not found then
-    return 'A barbearia não abre neste dia.';
-  end if;
-  if s < _minutes(h.open_time) or e > _minutes(h.close_time) then
-    return format('Fora do horário de funcionamento (%s às %s).', to_char(h.open_time, 'HH24:MI'), to_char(h.close_time, 'HH24:MI'));
+  if p_free then
+    if e > 24 * 60 then return 'O atendimento precisa terminar até meia-noite.'; end if;
+  else
+    select * into h from business_hours where weekday = extract(dow from p_date)::int;
+    if not found then
+      return 'A barbearia não abre neste dia.';
+    end if;
+    if s < _minutes(h.open_time) or e > _minutes(h.close_time) then
+      return format('Fora do horário de funcionamento (%s às %s).', to_char(h.open_time, 'HH24:MI'), to_char(h.close_time, 'HH24:MI'));
+    end if;
   end if;
   if exists (
     select 1 from bookings b
@@ -475,7 +504,7 @@ begin
     if not exists (select 1 from barbers where id = v_barber) then
       raise exception using errcode = 'PT400', message = 'Barbeiro inválido.';
     end if;
-    v_err := _placement_error(p_date, p_time, v_service.duration, v_barber, null);
+    v_err := _placement_error(p_date, p_time, v_service.duration, v_barber, null, true);
     if v_err is not null then raise exception using errcode = 'PT409', message = v_err; end if;
   else
     if p_date < v_now::date or (p_date = v_now::date and p_time <= v_now::time) then
@@ -525,7 +554,7 @@ begin
     v_dates := jsonb_build_array(to_char(p_date, 'YYYY-MM-DD'));
     for i in 1 .. c_months - 1 loop
       v_next := _same_weekday_in_month(p_date, i);
-      if _placement_error(v_next, p_time, v_service.duration, v_barber, null) is not null then
+      if _placement_error(v_next, p_time, v_service.duration, v_barber, null, v_staff.id is not null) is not null then
         v_skipped := v_skipped || to_jsonb(to_char(v_next, 'YYYY-MM-DD'));
         continue;
       end if;
@@ -575,7 +604,7 @@ begin
       v_barber := case when v_staff.role = 'barber' then b.barber_id else coalesce(p_patch ->> 'barberId', b.barber_id) end;
       select name into v_name from barbers where id = v_barber;
       if v_name is null then raise exception using errcode = 'PT400', message = 'Barbeiro inválido.'; end if;
-      v_err := _placement_error(v_date, v_time, b.duration, v_barber, b.id);
+      v_err := _placement_error(v_date, v_time, b.duration, v_barber, b.id, true);
       if v_err is not null then raise exception using errcode = 'PT409', message = v_err; end if;
       b.history := b.history || jsonb_build_array(jsonb_build_object(
         'at', now(), 'action', 'remarcado',
@@ -590,7 +619,7 @@ begin
         raise exception using errcode = 'PT400', message = 'Status inválido.';
       end if;
       if v_status = 'agendado' and b.status <> 'agendado' then
-        v_err := _placement_error(b.date, b.time, b.duration, b.barber_id, b.id);
+        v_err := _placement_error(b.date, b.time, b.duration, b.barber_id, b.id, true);
         if v_err is not null then raise exception using errcode = 'PT409', message = v_err; end if;
       end if;
       if v_status <> b.status then
@@ -733,7 +762,108 @@ end $$;
 -- Quem está logado (pelo token do cabeçalho), ou null.
 create or replace function public.staff_me() returns jsonb
 language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('id', id, 'role', role, 'barberId', barber_id) from _current_staff();
+  select jsonb_build_object('id', id, 'role', role, 'barberId', barber_id, 'email', email) from _current_staff();
+$$;
+
+-- Senha já usada por outra pessoa? (o login é só pela senha, então cada uma precisa ser única)
+create or replace function public._password_taken(p_password text, p_except text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from staff_access where id <> p_except and pass_hash = extensions.crypt(p_password, pass_hash));
+$$;
+
+-- 👤 Minha conta: trocar a própria senha e/ou e-mail (pede a senha atual).
+create or replace function public.update_my_account(p_current text, p_new_password text default null, p_email text default null)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access;
+  v_email text := nullif(lower(btrim(coalesce(p_email, ''))), '');
+begin
+  select * into v_staff from _current_staff();
+  if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  if v_staff.pass_hash <> extensions.crypt(coalesce(p_current, ''), v_staff.pass_hash) then
+    raise exception using errcode = 'PT400', message = 'Senha atual incorreta.';
+  end if;
+  if coalesce(p_new_password, '') <> '' then
+    if length(p_new_password) < 6 then raise exception using errcode = 'PT400', message = 'A nova senha precisa ter pelo menos 6 caracteres.'; end if;
+    if _password_taken(p_new_password, v_staff.id) then raise exception using errcode = 'PT400', message = 'Essa senha não pode ser usada. Escolha outra.'; end if;
+    update staff_access set pass_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf')) where id = v_staff.id;
+  end if;
+  if p_email is not null then
+    if v_email is not null and v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+      raise exception using errcode = 'PT400', message = 'E-mail inválido.';
+    end if;
+    if v_email is not null and exists (select 1 from staff_access where lower(email) = v_email and id <> v_staff.id) then
+      raise exception using errcode = 'PT400', message = 'Esse e-mail já está em uso por outra pessoa.';
+    end if;
+    update staff_access set email = v_email where id = v_staff.id;
+  end if;
+  return jsonb_build_object('ok', true, 'email', (select email from staff_access where id = v_staff.id));
+end $$;
+
+-- Esqueci minha senha (passo 1): só a função do Supabase (chave de serviço) chama; ela manda o código por e-mail.
+create or replace function public.create_password_reset(p_email text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access;
+  v_code  text;
+begin
+  select * into v_staff from staff_access where lower(email) = lower(btrim(coalesce(p_email, '')));
+  if not found then return null; end if;
+  if (select count(*) from staff_password_resets where staff_id = v_staff.id and created_at > now() - interval '1 hour') >= 3 then
+    return jsonb_build_object('limited', true);
+  end if;
+  v_code := lpad(((('x' || encode(extensions.gen_random_bytes(4), 'hex'))::bit(32)::bigint) % 1000000)::text, 6, '0');
+  -- O código anterior deixa de valer (fica guardado para contar o limite por hora).
+  update staff_password_resets set expires_at = least(expires_at, now()) where staff_id = v_staff.id;
+  delete from staff_password_resets where created_at < now() - interval '1 day';
+  insert into staff_password_resets (staff_id, code_hash, expires_at)
+  values (v_staff.id, extensions.crypt(v_code, extensions.gen_salt('bf')), now() + interval '15 minutes');
+  return jsonb_build_object('code', v_code, 'email', v_staff.email,
+    'name', coalesce((select name from barbers where id = v_staff.barber_id), v_staff.id));
+end $$;
+
+-- Esqueci minha senha (passo 2): código do e-mail + nova senha. Sem "raise" no erro para gravar a tentativa.
+create or replace function public.reset_password_with_code(p_email text, p_code text, p_new_password text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access;
+  v_reset staff_password_resets;
+begin
+  select * into v_staff from staff_access where lower(email) = lower(btrim(coalesce(p_email, '')));
+  if found then
+    select * into v_reset from staff_password_resets where staff_id = v_staff.id and expires_at > now() and attempts < 5
+      order by created_at desc limit 1;
+  end if;
+  if v_reset.id is null then
+    return jsonb_build_object('ok', false, 'message', 'Código inválido ou vencido. Peça um novo.');
+  end if;
+  if v_reset.code_hash <> extensions.crypt(btrim(coalesce(p_code, '')), v_reset.code_hash) then
+    update staff_password_resets set attempts = attempts + 1 where id = v_reset.id;
+    return jsonb_build_object('ok', false, 'message', 'Código incorreto.');
+  end if;
+  if length(coalesce(p_new_password, '')) < 6 then
+    return jsonb_build_object('ok', false, 'message', 'A nova senha precisa ter pelo menos 6 caracteres.');
+  end if;
+  if _password_taken(p_new_password, v_staff.id) then
+    return jsonb_build_object('ok', false, 'message', 'Essa senha não pode ser usada. Escolha outra.');
+  end if;
+  update staff_access set pass_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf')) where id = v_staff.id;
+  update staff_password_resets set expires_at = now() where staff_id = v_staff.id;  -- código usado não vale de novo
+  delete from staff_sessions where staff_id = v_staff.id;  -- sai de todos os aparelhos
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Mensalidade (Pix): o dono marca "já paguei" no ciclo e o aviso para de aparecer.
+create or replace function public.billing_ack(p_cycle text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception using errcode = 'PT403', message = 'Só o dono.'; end if;
+  insert into billing_acks (cycle) values (p_cycle) on conflict (cycle) do nothing;
+end $$;
+
+create or replace function public.billing_acked(p_cycle text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin() and exists (select 1 from billing_acks where cycle = p_cycle);
 $$;
 
 create or replace function public.staff_logout() returns void
@@ -762,7 +892,7 @@ returns void language sql volatile security definer set search_path = public as 
 $$;
 
 -- Funções internas: ninguém chama direto.
-revoke execute on function public._placement_error(date, time, int, text, uuid) from public, anon, authenticated;
+revoke execute on function public._placement_error(date, time, int, text, uuid, boolean) from public, anon, authenticated;
 revoke execute on function public._current_staff() from public, anon, authenticated;
 grant execute on function public.busy_intervals(date) to anon, authenticated;
 grant execute on function public.create_booking(text, text, date, time, text, text, text, boolean) to anon, authenticated;
@@ -775,6 +905,12 @@ grant execute on function public.update_booking(uuid, jsonb) to anon, authentica
 grant execute on function public.staff_login(text) to anon, authenticated;
 grant execute on function public.staff_me() to anon, authenticated;
 grant execute on function public.staff_logout() to anon, authenticated;
+grant execute on function public.update_my_account(text, text, text) to anon, authenticated;
+grant execute on function public.reset_password_with_code(text, text, text) to anon, authenticated;
+grant execute on function public.billing_ack(text) to anon, authenticated;
+grant execute on function public.billing_acked(text) to anon, authenticated;
+revoke execute on function public.create_password_reset(text) from public, anon, authenticated;
+revoke execute on function public._password_taken(text, text) from public, anon, authenticated;
 grant execute on function public.save_push_subscription(text, text, text) to anon, authenticated;
 grant execute on function public.delete_push_subscription(text) to anon, authenticated;
 grant execute on function public.system_status() to anon, authenticated;
@@ -788,7 +924,8 @@ insert into public.barbers (id, name, role, owner, bio, sort) values
   ('adao',    'Adão Machado',       'Barbeiro Proprietário', true,  'Fundador da Barbearia Machado. Corte, barba e prótese capilar com o padrão da casa.', 1),
   ('emanuel', 'Emanuel Zampieri',   'Barbeiro',              false, 'Degradês, cortes na tesoura e barba alinhada na navalha.', 2),
   ('nick',    'Nick Barber',        'Barbeiro',              false, 'Do navalhado ao platinado, com acabamento caprichado.', 3),
-  ('joao',    'João Wesley Oberek', 'Barbeiro',              false, 'Corte, barba terapia e tratamentos para cabelo e barba.', 4)
+  ('joao',    'João Wesley Oberek', 'Barbeiro',              false, 'Corte, barba terapia e tratamentos para cabelo e barba.', 4),
+  ('ste',     'Ste Prado',          'Barbeira',              false, 'Cortes, barba e acabamentos com capricho.', 5)
 on conflict (id) do update set name = excluded.name, role = excluded.role, owner = excluded.owner,
   bio = excluded.bio, sort = excluded.sort;
 
@@ -829,7 +966,8 @@ insert into public.staff_access (id, role, barber_id, pass_hash) values
   ('adao',    'admin',  'adao',    extensions.crypt('machado26', extensions.gen_salt('bf'))),
   ('emanuel', 'barber', 'emanuel', extensions.crypt('emanuel26', extensions.gen_salt('bf'))),
   ('nick',    'barber', 'nick',    extensions.crypt('nick26',    extensions.gen_salt('bf'))),
-  ('joao',    'barber', 'joao',    extensions.crypt('joao26',    extensions.gen_salt('bf')))
+  ('joao',    'barber', 'joao',    extensions.crypt('joao26',    extensions.gen_salt('bf'))),
+  ('ste',     'barber', 'ste',     extensions.crypt('ste26',     extensions.gen_salt('bf')))
 on conflict (id) do nothing;
 
 -- ----------------------------------------------------------------- avisos a cada minuto

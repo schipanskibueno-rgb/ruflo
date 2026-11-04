@@ -506,7 +506,7 @@ create or replace function public.create_booking(
 ) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
-  c_step   constant int := 30;  -- intervalo da grade de horários (min)
+  c_step   constant int := {{INTERVALO}};  -- intervalo da grade de horários (min)
   c_window constant int := 30;  -- dias liberados para o cliente
   c_max    constant int := 3;   -- horários em aberto por telefone (anti-spam; série recorrente conta 1)
   c_months constant int := 6;   -- meses criados de uma vez num agendamento recorrente
@@ -607,8 +607,8 @@ begin
     end loop;
   end if;
 
-  -- Cliente marcou pelo site: avisa na hora o barbeiro e o dono (sem esperar o minuto do cron).
-  if v_staff.id is null then perform _notify_now(); end if;
+  -- Avisa na hora o barbeiro e o dono (sem esperar o minuto do cron), pelo site ou pelo painel.
+  perform _notify_now();
 
   return _booking_json(v_row) || jsonb_build_object('repeatDates', v_dates, 'repeatSkipped', v_skipped);
 end $$;

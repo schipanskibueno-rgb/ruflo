@@ -506,7 +506,7 @@ create or replace function public.create_booking(
 ) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
-  c_step   constant int := 30;  -- intervalo da grade de horários (min)
+  c_step   constant int := 40;  -- intervalo da grade de horários (min)
   c_window constant int := 30;  -- dias liberados para o cliente
   c_max    constant int := 3;   -- horários em aberto por telefone (anti-spam; série recorrente conta 1)
   c_months constant int := 6;   -- meses criados de uma vez num agendamento recorrente
@@ -607,8 +607,8 @@ begin
     end loop;
   end if;
 
-  -- Cliente marcou pelo site: avisa na hora o barbeiro e o dono (sem esperar o minuto do cron).
-  if v_staff.id is null then perform _notify_now(); end if;
+  -- Avisa na hora o barbeiro e o dono (sem esperar o minuto do cron), pelo site ou pelo painel.
+  perform _notify_now();
 
   return _booking_json(v_row) || jsonb_build_object('repeatDates', v_dates, 'repeatSkipped', v_skipped);
 end $$;
@@ -985,7 +985,7 @@ insert into public.services (id, cat, name, price, duration, description, tag, s
   ('alistamento',         'Cabelo',                'Alistamento Americano 🇺🇸',            70,   40, 'O corte militar no estilo americano, bem batido.', null, 3),
   ('sobrancelha',         'Cabelo',                'Sobrancelha',                          15,   15, 'Sobrancelha alinhada na navalha.', null, 4),
   ('pezinho',             'Cabelo',                'Pezinho',                              15,   15, 'Acabamento do contorno entre um corte e outro.', null, 5),
-  ('barba',               'Barba',                 'Barba',                                45,   30, 'Barba alinhada e desenhada na navalha.', null, 6),
+  ('barba',               'Barba',                 'Barba',                                45,   40, 'Barba alinhada e desenhada na navalha.', null, 6),
   ('barba-terapia',       'Barba',                 'Barba Terapia',                        45,   40, 'Barba com toalha quente e cuidado relaxante.', null, 7),
   ('hidratacao-barba',    'Barba',                 'Hidratação de Barba',                  30,   30, 'Fios macios e barba com brilho saudável.', null, 8),
   ('barba-pintura',       'Barba',                 'Barba + Pintura de Barba',             95,   60, 'Barba feita com pigmentação para cobrir falhas e fios brancos.', null, 9),

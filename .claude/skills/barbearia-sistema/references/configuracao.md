@@ -30,6 +30,7 @@ O gerador (`scripts/gerar_sistema.py`) lê um arquivo como este. Exemplo complet
   "supabase": { "url": "https://xxxx.supabase.co", "chave_publica": "sb_publishable_…",
                 "funcao": "quick-task" },    // nome com que a função foi publicada
   "mensalidade": 69.90,                      // valor do Pix mensal do sistema
+  "intervalo": 30,                           // opcional: minutos entre os horários oferecidos (padrão 30; Machado 40)
   "horarios": { "seg": ["09:00", "12:00", "13:00", "20:00"], "sab": ["08:30", "16:00"], "dom": null },
                                              // dias: seg ter qua qui sex sab dom; null/ausente = fechado
                                              // 2 horários = abre e fecha; 4 = abre, almoço, volta, fecha

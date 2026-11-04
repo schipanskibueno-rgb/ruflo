@@ -208,6 +208,9 @@ def gerar(cfg_path, out=None):
     sb_key = texto(sb, 'chave_publica', False)
     sb_fn = texto(sb, 'funcao', False) or 'sistema'
     mensal = float(cfg.get('mensalidade', 69.90))
+    intervalo = cfg.get('intervalo', 30)
+    if not isinstance(intervalo, int) or not 10 <= intervalo <= 120:
+        falha(f'intervalo inválido: {intervalo} (minutos entre os horários, ex.: 30 ou 40)')
     fuso = texto(cfg, 'fuso', False) or 'America/Sao_Paulo'
     if not re.fullmatch(r'America/[A-Za-z_]+', fuso):
         falha(f'fuso inválido: {fuso} (ex.: America/Sao_Paulo, America/Cuiaba, America/Manaus)')
@@ -308,6 +311,7 @@ def gerar(cfg_path, out=None):
         'WHATS_NUMERO': wa_num, 'WHATS_EXIBICAO': wa_vis, 'INSTAGRAM': insta,
         'SUPABASE_URL': sb_url, 'SUPABASE_CHAVE': sb_key, 'SUPABASE_FUNCAO': sb_fn,
         'MENSALIDADE': f'{mensal:.2f}',
+        'INTERVALO': str(intervalo),
         'FUSO': fuso,
         'FONTE_TITULO': fonte, 'FONTE_TITULO_URL': fonte.replace(' ', '+'),
         'FOTOS_BARBEIROS': fotos_js,

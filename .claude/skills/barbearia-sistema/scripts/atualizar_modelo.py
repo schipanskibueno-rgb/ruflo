@@ -53,6 +53,7 @@ html = sub(html, [
     ('a.download = `agenda-machado${who}', 'a.download = `agenda-{{SLUG}}${who}', 1),
     ('placeholder="Ex.: Prótese micro pele"', 'placeholder="Ex.: Degradê com barba"', 1),
     ("timezone: 'America/Sao_Paulo',", "timezone: '{{FUSO}}',", 1),
+    ('    slotStep: 40,          // igual a c_step', '    slotStep: {{INTERVALO}},          // igual a c_step', 1),
     ('Barbearia Machado Prime', '{{NOME_COMPLETO}}', None),
     ('alt="Barbearia Machado — Especialista em prótese capilar"', 'alt="{{NOME}} — {{SLOGAN}}"', 1),
     ('Barbearia Machado', '{{NOME}}', None),
@@ -117,6 +118,7 @@ sql = sub(sql, [
     ('pela função "machado" no primeiro uso', 'pela função do Supabase no primeiro uso', 1),
     ("perform cron.schedule('machado-avisos'", "perform cron.schedule('{{SLUG}}-avisos'", 1),
     ("'https://uvdieiiydisobkzoupoj.supabase.co/functions/v1/quick-task/notify'", "'{{SUPABASE_URL}}/functions/v1/{{SUPABASE_FUNCAO}}/notify'", 1),
+    ('  c_step   constant int := 40;', '  c_step   constant int := {{INTERVALO}};', 1),
     ('-- Barbearia Machado — banco de dados do agendamento (Supabase)', '-- {{NOME}} — banco de dados do agendamento (Supabase)', 1),
 ], 'schema.sql')
 for leftover in ['Machado', 'machado', 'Adão', 'adao', 'emanuel', 'uvdieiiydisobkzoupoj', 'quick-task']:

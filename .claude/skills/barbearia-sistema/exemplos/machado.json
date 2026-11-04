@@ -32,6 +32,7 @@
     "chave_publica": "sb_publishable_1EY6IdOz6mLqrmvEizcg3w_sC6gLfP_",
     "funcao": "quick-task"
   },
+  "intervalo": 40,
   "mensalidade": 69.90,
   "horarios": {
     "seg": ["09:00", "12:00", "13:00", "20:00"],
@@ -60,7 +61,7 @@
     { "id": "alistamento", "categoria": "Cabelo", "nome": "Alistamento Americano 🇺🇸", "preco": 70, "duracao": 40, "descricao": "O corte militar no estilo americano, bem batido." },
     { "id": "sobrancelha", "categoria": "Cabelo", "nome": "Sobrancelha", "preco": 15, "duracao": 15, "descricao": "Sobrancelha alinhada na navalha." },
     { "id": "pezinho", "categoria": "Cabelo", "nome": "Pezinho", "preco": 15, "duracao": 15, "descricao": "Acabamento do contorno entre um corte e outro." },
-    { "id": "barba", "categoria": "Barba", "nome": "Barba", "preco": 45, "duracao": 30, "descricao": "Barba alinhada e desenhada na navalha." },
+    { "id": "barba", "categoria": "Barba", "nome": "Barba", "preco": 45, "duracao": 40, "descricao": "Barba alinhada e desenhada na navalha." },
     { "id": "barba-terapia", "categoria": "Barba", "nome": "Barba Terapia", "preco": 45, "duracao": 40, "descricao": "Barba com toalha quente e cuidado relaxante." },
     { "id": "hidratacao-barba", "categoria": "Barba", "nome": "Hidratação de Barba", "preco": 30, "duracao": 30, "descricao": "Fios macios e barba com brilho saudável." },
     { "id": "barba-pintura", "categoria": "Barba", "nome": "Barba + Pintura de Barba", "preco": 95, "duracao": 60, "descricao": "Barba feita com pigmentação para cobrir falhas e fios brancos." },

@@ -96,6 +96,7 @@ const dayLabel = (iso: string) => {
 /**
  * A cada minuto: avisa o barbeiro do atendimento que começa (5 min antes até 5 min depois)
  * e avisa barbeiro + dono de cada agendamento novo feito pelo site (um aviso por série recorrente).
+ * O create_booking também chama esta rota na hora em que o cliente marca (_notify_now no schema.sql).
  * Cada horário é "reservado" antes do envio, então nunca é avisado duas vezes.
  */
 async function runNotify(now = new Date()) {
@@ -137,8 +138,8 @@ async function runNotify(now = new Date()) {
     if (seen.has(key)) continue;
     seen.add(key);
     sent += await sendTo(to(b.barber_id, true), {
-      title: '📅 Novo agendamento',
-      body: `${b.name} · ${b.service_name} · ${dayLabel(b.date)} às ${b.time.slice(0, 5)} com ${first(b.barber_name)}${b.series_id ? ' · 🔁 todo mês' : ''}`,
+      title: `📅 Novo agendamento: ${b.name}`,
+      body: `${b.service_name} · ${dayLabel(b.date)} às ${b.time.slice(0, 5)} · com ${first(b.barber_name)}${b.series_id ? ' · 🔁 todo mês' : ''}`,
       tag: `new-${key}`,
       url: './#/admin',
     });

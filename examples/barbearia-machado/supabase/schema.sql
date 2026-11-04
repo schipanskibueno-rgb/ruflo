@@ -483,6 +483,22 @@ returns boolean language sql stable security definer set search_path = public as
   from business_hours h where h.weekday = extract(dow from p_date)::int;
 $$;
 
+-- Chama a função dos avisos agora (o pedido sai quando o agendamento é gravado).
+-- Sem pg_net ou sem endereço configurado não faz nada: o aviso sai no próximo minuto pelo cron.
+create or replace function public._notify_now()
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_url text := (select value from app_secrets where key = 'notify_url');
+begin
+  if v_url is null then return; end if;
+  perform net.http_post(url := v_url, body := '{}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'x-cron-secret', (select value from app_secrets where key = 'cron_secret')));
+exception when others then
+  null;
+end $$;
+revoke all on function public._notify_now() from public, anon, authenticated;
+
 drop function if exists public.create_booking(text, text, date, time, text, text, text);
 create or replace function public.create_booking(
   p_barber text, p_service text, p_date date, p_time time,
@@ -590,6 +606,9 @@ begin
       end;
     end loop;
   end if;
+
+  -- Cliente marcou pelo site: avisa na hora o barbeiro e o dono (sem esperar o minuto do cron).
+  if v_staff.id is null then perform _notify_now(); end if;
 
   return _booking_json(v_row) || jsonb_build_object('repeatDates', v_dates, 'repeatSkipped', v_skipped);
 end $$;
@@ -1009,6 +1028,8 @@ do $$
 declare
   v_url text := 'https://uvdieiiydisobkzoupoj.supabase.co/functions/v1/quick-task/notify';
 begin
+  insert into public.app_secrets (key, value) values ('notify_url', v_url)
+  on conflict (key) do update set value = excluded.value;
   create extension if not exists pg_net;
   create extension if not exists pg_cron;
   perform cron.schedule('machado-avisos', '* * * * *', format(

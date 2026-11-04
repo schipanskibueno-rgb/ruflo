@@ -1,0 +1,82 @@
+{
+  "slug": "machado",
+  "nome": "Barbearia Machado",
+  "nome_completo": "Barbearia Machado Prime",
+  "nome_curto": "Machado",
+  "slogan": "Especialista em prótese capilar",
+  "emoji": "🪓",
+  "dono": { "nome": "Adão", "feminino": false },
+  "whatsapp": "(42) 99965-3210",
+  "instagram": "barbearia_machado_27",
+  "endereco": {
+    "rua": "R. Cel. Olegário de Macedo, 134",
+    "bairro": "Água Suja",
+    "cidade": "Castro",
+    "uf": "PR",
+    "cep": "84165-690"
+  },
+  "cores": {
+    "primaria": "#e8302a",
+    "primaria_clara": "#ff4b3e",
+    "primaria_hover": "#ff6a5c",
+    "primaria_escura": "#d42a24",
+    "primaria_mais_escura": "#c0231d",
+    "destaque": "#c29760",
+    "destaque_clara": "#e2b98a",
+    "destaque_escura": "#8a5a25",
+    "creme": "#f3e9d2"
+  },
+  "fonte_titulo": "Oswald",
+  "supabase": {
+    "url": "https://uvdieiiydisobkzoupoj.supabase.co",
+    "chave_publica": "sb_publishable_1EY6IdOz6mLqrmvEizcg3w_sC6gLfP_",
+    "funcao": "quick-task"
+  },
+  "mensalidade": 69.90,
+  "horarios": {
+    "seg": ["09:00", "20:00"],
+    "ter": ["09:00", "20:00"],
+    "qua": ["09:00", "20:00"],
+    "qui": ["09:00", "20:00"],
+    "sex": ["09:00", "20:00"],
+    "sab": ["08:30", "16:00"],
+    "dom": null
+  },
+  "barbeiros": [
+    { "id": "adao", "nome": "Adão Machado", "cargo": "Barbeiro Proprietário", "dono": true, "senha": "machado26",
+      "bio": "Fundador da Barbearia Machado. Corte, barba e prótese capilar com o padrão da casa." },
+    { "id": "emanuel", "nome": "Emanuel Zampieri", "cargo": "Barbeiro", "senha": "emanuel26",
+      "bio": "Degradês, cortes na tesoura e barba alinhada na navalha." },
+    { "id": "nick", "nome": "Nick Barber", "cargo": "Barbeiro", "senha": "nick26",
+      "bio": "Do navalhado ao platinado, com acabamento caprichado." },
+    { "id": "joao", "nome": "João Wesley Oberek", "cargo": "Barbeiro", "senha": "joao26",
+      "bio": "Corte, barba terapia e tratamentos para cabelo e barba." },
+    { "id": "ste", "nome": "Ste Prado", "cargo": "Barbeira", "senha": "ste26",
+      "bio": "Cortes, barba e acabamentos com capricho." }
+  ],
+  "servicos": [
+    { "id": "corte", "categoria": "Cabelo", "nome": "Corte de Cabelo", "preco": 45, "duracao": 40, "descricao": "Degradê, social ou na tesoura, com acabamento na navalha." },
+    { "id": "navalhado", "categoria": "Cabelo", "nome": "Navalhado", "preco": 50, "duracao": 40, "descricao": "Corte com acabamento completo na navalha." },
+    { "id": "alistamento", "categoria": "Cabelo", "nome": "Alistamento Americano 🇺🇸", "preco": 70, "duracao": 40, "descricao": "O corte militar no estilo americano, bem batido." },
+    { "id": "sobrancelha", "categoria": "Cabelo", "nome": "Sobrancelha", "preco": 15, "duracao": 15, "descricao": "Sobrancelha alinhada na navalha." },
+    { "id": "pezinho", "categoria": "Cabelo", "nome": "Pezinho", "preco": 15, "duracao": 15, "descricao": "Acabamento do contorno entre um corte e outro." },
+    { "id": "barba", "categoria": "Barba", "nome": "Barba", "preco": 45, "duracao": 30, "descricao": "Barba alinhada e desenhada na navalha." },
+    { "id": "barba-terapia", "categoria": "Barba", "nome": "Barba Terapia", "preco": 45, "duracao": 40, "descricao": "Barba com toalha quente e cuidado relaxante." },
+    { "id": "hidratacao-barba", "categoria": "Barba", "nome": "Hidratação de Barba", "preco": 30, "duracao": 30, "descricao": "Fios macios e barba com brilho saudável." },
+    { "id": "barba-pintura", "categoria": "Barba", "nome": "Barba + Pintura de Barba", "preco": 95, "duracao": 60, "descricao": "Barba feita com pigmentação para cobrir falhas e fios brancos." },
+    { "id": "corte-barba", "categoria": "Combos", "nome": "Corte de Cabelo + Barba", "preco": 90, "duracao": 60, "descricao": "O combo clássico: corte e barba completos.", "tag": "Mais pedido" },
+    { "id": "completo", "categoria": "Combos", "nome": "Corte + Barba Terapia + Sobrancelha", "preco": 95, "duracao": 75, "descricao": "O pacote completo para sair impecável.", "tag": "Mais completo" },
+    { "id": "corte-sobrancelha", "categoria": "Combos", "nome": "Corte de Cabelo + Sobrancelha", "preco": 50, "duracao": 45, "descricao": "Corte com sobrancelha alinhada." },
+    { "id": "barba-pezinho", "categoria": "Combos", "nome": "Barba + Pezinho", "preco": 60, "duracao": 45, "descricao": "Barba feita e contorno do cabelo em dia." },
+    { "id": "hidratacao-cabelo", "categoria": "Química e tratamentos", "nome": "Hidratação de Cabelo", "preco": 30, "duracao": 30, "descricao": "Tratamento para fios macios e saudáveis." },
+    { "id": "limpeza-pele", "categoria": "Química e tratamentos", "nome": "Limpeza de Pele", "preco": 30, "duracao": 30, "descricao": "Limpeza facial para uma pele renovada." },
+    { "id": "pintura-cabelo", "categoria": "Química e tratamentos", "nome": "Pintura de Cabelo", "preco": 100, "duracao": 60, "descricao": "Coloração para cobrir fios brancos ou mudar o tom." },
+    { "id": "platinado", "categoria": "Química e tratamentos", "nome": "Platinado", "preco": 200, "duracao": 180, "descricao": "Descoloração completa para o loiro platinado." },
+    { "id": "luzes", "categoria": "Química e tratamentos", "nome": "Luzes", "preco": 200, "duracao": 150, "descricao": "Mechas para iluminar o corte." },
+    { "id": "protese-avaliacao", "categoria": "Prótese capilar", "nome": "Avaliação Prótese Capilar", "preco": 0, "duracao": 30, "descricao": "Análise do seu caso para indicar a prótese ideal.", "tag": "Comece aqui" },
+    { "id": "protese-micropele", "categoria": "Prótese capilar", "nome": "Aplicação Prótese Capilar Micro Pele", "preco": 2000, "duracao": 180, "descricao": "Prótese com base em micro pele, de aparência natural." },
+    { "id": "protese-fio-a-fio", "categoria": "Prótese capilar", "nome": "Aplicação Prótese Fio a Fio", "preco": 600, "duracao": 120, "descricao": "Aplicação fio a fio para preencher as áreas com falha." },
+    { "id": "protese-manutencao", "categoria": "Prótese capilar", "nome": "Manutenção Prótese Capilar", "preco": 80, "duracao": 60, "descricao": "Limpeza, nova fixação e ajustes da prótese." },
+    { "id": "protese-tonalizacao", "categoria": "Prótese capilar", "nome": "Tonalização Prótese Capilar", "preco": 120, "duracao": 60, "descricao": "Ajuste da cor da prótese ao seu cabelo natural." }
+  ]
+}

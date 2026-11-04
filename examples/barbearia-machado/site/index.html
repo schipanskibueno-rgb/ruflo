@@ -1647,9 +1647,23 @@ const BS = (() => {
   const monthKey = (d) => d.getFullYear() * 12 + d.getMonth();
   const minMonth = monthKey(BS.parseDate(cfg.today));
   const maxMonth = monthKey(BS.parseDate(lastDay));
-  const wk = cfg.hours[1];
-  const sat = cfg.hours[6];
-  const hoursNote = wk && sat ? `Seg a sex ${BS.fmtHour(wk[0])}–${BS.fmtHour(wk[1])} · Sáb ${BS.fmtHour(sat[0])}–${BS.fmtHour(sat[1])}` : '';
+  // Horário por dia, juntando dias seguidos iguais: "Seg a sex 9h–20h · Sáb 8h30–16h".
+  const DAY_ABBR = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const hoursNote = (() => {
+    const groups = [];
+    for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+      const h = cfg.hours[d];
+      const txt = h ? `${BS.fmtHour(h[0])}–${BS.fmtHour(h[1])}` : null;
+      const last = groups[groups.length - 1];
+      if (txt && last && last.txt === txt && last.end === (d === 0 ? 6 : d - 1)) last.end = d;
+      else if (txt) groups.push({ start: d, end: d, txt });
+    }
+    return groups.map((g) => {
+      const days = g.start === g.end ? DAY_ABBR[g.start]
+        : `${DAY_ABBR[g.start]} ${g.end === (g.start === 6 ? 0 : g.start + 1) ? 'e' : 'a'} ${DAY_ABBR[g.end].toLowerCase()}`;
+      return `${days} ${g.txt}`;
+    }).join(' · ');
+  })();
 
   function renderCalendar() {
     const y = view.getFullYear();

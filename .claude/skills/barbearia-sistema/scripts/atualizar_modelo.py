@@ -105,7 +105,7 @@ def block(text, start_pat, label, repl):
     return text[:m.start()] + repl + text[m.end():]
 sql = block(sql, r"insert into public\.barbers \(id, name, role, owner, bio, sort\) values\n.*?bio = excluded\.bio, sort = excluded\.sort;", 'barbeiros', '{{SQL_BARBEIROS}}')
 sql = block(sql, r"insert into public\.services \(id, cat, name, price, duration, description, tag, sort\) values\n.*?tag = excluded\.tag, sort = excluded\.sort;", 'serviços', '{{SQL_SERVICOS}}')
-sql = block(sql, r"insert into public\.business_hours \(weekday, open_time, close_time\) values\n.*?close_time = excluded\.close_time;", 'horários', '{{SQL_HORARIOS}}')
+sql = block(sql, r"insert into public\.business_hours \(weekday, open_time, close_time, break_start, break_end\) values\n.*?break_end = excluded\.break_end;", 'horários', '{{SQL_HORARIOS}}')
 sql = block(sql, r"insert into public\.staff_access \(id, role, barber_id, pass_hash\) values\n.*?on conflict \(id\) do nothing;", 'equipe', '{{SQL_EQUIPE}}')
 sql = block(sql, r"-- Senhas iniciais do painel \(cada pessoa precisa ter uma senha diferente\):\n--   [^\n]*\n", 'comentário senhas',
             '-- Senhas iniciais do painel (cada pessoa precisa ter uma senha diferente):\n--   {{SENHAS_COMENTARIO}}\n')

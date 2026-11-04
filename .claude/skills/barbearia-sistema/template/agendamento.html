@@ -1247,7 +1247,9 @@ const BS = (() => {
         barbers: check(barbers).map((b) => ({ id: b.id, name: b.name, role: b.role, owner: b.owner, photo: BARBER_PHOTOS[b.id] || b.photo, bio: b.bio })),
         services: list,
         categories: [...new Set(list.map((s) => s.cat))],
-        hours: Object.fromEntries(check(hours).map((h) => [h.weekday, [h.open_time.slice(0, 5), h.close_time.slice(0, 5)]])),
+        // [abre, fecha] ou [abre, fecha, início do almoço, volta do almoço]
+        hours: Object.fromEntries(check(hours).map((h) => [h.weekday, [h.open_time.slice(0, 5), h.close_time.slice(0, 5),
+          ...(h.break_start && h.break_end ? [h.break_start.slice(0, 5), h.break_end.slice(0, 5)] : [])]])),
         blocked: Boolean(status && !status.error && status.data && status.data.blocked),
       };
     }).catch((err) => {
@@ -1261,15 +1263,29 @@ const BS = (() => {
   /** Horários livres a partir dos intervalos ocupados (barber_id null = barbearia toda). */
   // free = equipe marcando pelo painel: qualquer dia, das 7h até 23h30 (o cliente fica no horário da casa).
   const STAFF_HOURS = ['07:00', '24:00'];
+  /** Inícios possíveis: grade de slotStep em cada período (manhã e tarde, se houver almoço)
+   *  e mais o último horário que termina exatamente no fim do período (ex.: corte 11:20 → 12:00).
+   *  Igual a _slot_ok no schema.sql. */
+  function slotStarts(hours, duration, step, free) {
+    const periods = free ? [[STAFF_HOURS[0], STAFF_HOURS[1]]]
+      : hours.length > 2 ? [[hours[0], hours[2]], [hours[3], hours[1]]] : [[hours[0], hours[1]]];
+    const starts = new Set();
+    for (const [a, b] of periods.map(([x, y]) => [toMin(x), toMin(y)])) {
+      for (let s = a; s + duration <= b; s += step) starts.add(s);
+      if (!free && b - duration >= a) starts.add(b - duration);
+    }
+    return [...starts].sort((x, y) => x - y);
+  }
   function freeSlots(cfg, date, duration, barberId, busy, excludeId, free = false) {
     const hours = free ? STAFF_HOURS : cfg.hours[weekday(date)];
     if (!hours) return [];
     const now = nowLocal();
     if (date < now.date) return [];
+    const starts = slotStarts(hours, duration, cfg.slotStep, free);
     const slotsFor = (id) => {
       const taken = busy.filter((x) => (x.barber_id === id || x.barber_id === null) && (!excludeId || x.booking_id !== excludeId));
       const out = [];
-      for (let s = toMin(hours[0]); s + duration <= toMin(hours[1]); s += cfg.slotStep) {
+      for (const s of starts) {
         if (date === now.date && s <= now.minutes) continue;
         if (!taken.some((x) => overlaps(s, s + duration, x.start_min, x.end_min))) out.push(toHHMM(s));
       }
@@ -1647,7 +1663,9 @@ const BS = (() => {
     const groups = [];
     for (const d of [1, 2, 3, 4, 5, 6, 0]) {
       const h = cfg.hours[d];
-      const txt = h ? `${BS.fmtHour(h[0])}–${BS.fmtHour(h[1])}` : null;
+      const txt = !h ? null : h.length > 2
+        ? `${BS.fmtHour(h[0])}–${BS.fmtHour(h[2])} e ${BS.fmtHour(h[3])}–${BS.fmtHour(h[1])}`
+        : `${BS.fmtHour(h[0])}–${BS.fmtHour(h[1])}`;
       const last = groups[groups.length - 1];
       if (txt && last && last.txt === txt && last.end === (d === 0 ? 6 : d - 1)) last.end = d;
       else if (txt) groups.push({ start: d, end: d, txt });

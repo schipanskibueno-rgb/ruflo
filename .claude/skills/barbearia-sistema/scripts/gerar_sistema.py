@@ -262,10 +262,14 @@ def gerar(cfg_path, out=None):
         h = horarios.get(dia)
         if not h:
             continue
-        a, f = h
-        if not re.fullmatch(r'\d{2}:\d{2}', a) or not re.fullmatch(r'\d{2}:\d{2}', f) or f <= a:
-            falha(f'horário de {dia} inválido: {h} (use ["09:00", "20:00"])')
-        linhas_h.append((wd, a, f))
+        # ["abre", "fecha"] ou ["abre", "início do almoço", "volta do almoço", "fecha"]
+        if (not isinstance(h, list) or len(h) not in (2, 4)
+                or not all(isinstance(x, str) and re.fullmatch(r'\d{2}:\d{2}', x) for x in h)
+                or any(h[i + 1] <= h[i] for i in range(len(h) - 1))):
+            falha(f'horário de {dia} inválido: {h} (use ["09:00", "20:00"] ou, com almoço, ["09:00", "12:00", "13:00", "20:00"])')
+        a, f = h[0], h[-1]
+        pausa = (h[1], h[2]) if len(h) == 4 else None
+        linhas_h.append((wd, a, f, pausa))
     if not linhas_h:
         falha('informe o horário de funcionamento de pelo menos um dia')
     linhas_h.sort(key=lambda x: (x[0] == 0, x[0]))
@@ -330,10 +334,11 @@ def gerar(cfg_path, out=None):
                   f'-- Serviços que saíram da lista: deixam de aparecer para os clientes.\n'
                   f'update public.services set active = false where id not in ({", ".join(sql_txt(s["id"]) for s in servicos)});')
     sql_hor = ('-- Dia que não está na lista = fechado.\n'
-               f'delete from public.business_hours where weekday not in ({", ".join(str(w) for w, _, _ in linhas_h)});\n'
-               'insert into public.business_hours (weekday, open_time, close_time) values\n'
-               + vals(f"  ({w}, '{a}', '{f}')" for w, a, f in linhas_h)
-               + '\non conflict (weekday) do update set open_time = excluded.open_time, close_time = excluded.close_time;')
+               f'delete from public.business_hours where weekday not in ({", ".join(str(w) for w, *_ in linhas_h)});\n'
+               'insert into public.business_hours (weekday, open_time, close_time, break_start, break_end) values\n'
+               + vals(f"  ({w}, '{a}', '{f}', " + (f"'{pz[0]}', '{pz[1]}')" if pz else 'null, null)') for w, a, f, pz in linhas_h)
+               + '\non conflict (weekday) do update set open_time = excluded.open_time, close_time = excluded.close_time,\n'
+               + '  break_start = excluded.break_start, break_end = excluded.break_end;')
     sql_eq = ('insert into public.staff_access (id, role, barber_id, pass_hash) values\n'
               + vals(f"  ({sql_txt(b['id'])}, '{'admin' if b.get('dono') else 'barber'}', {sql_txt(b['id'])}, extensions.crypt({sql_txt(b['senha'])}, extensions.gen_salt('bf')))"
                      for b in barbeiros)

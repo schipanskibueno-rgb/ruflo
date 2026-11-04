@@ -55,6 +55,14 @@ create table if not exists public.business_hours (
   close_time time not null,
   check (close_time > open_time)
 );
+-- Intervalo (almoço): o cliente não marca nesse período. Os dois vazios = sem intervalo.
+alter table public.business_hours add column if not exists break_start time;
+alter table public.business_hours add column if not exists break_end   time;
+do $$ begin
+  alter table public.business_hours add constraint business_hours_break_check check (
+    (break_start is null and break_end is null)
+    or (break_start > open_time and break_end > break_start and close_time > break_end));
+exception when duplicate_object then null; end $$;
 
 -- Quem acessa o painel: uma senha por pessoa (guardada só como hash).
 drop table if exists public.staff cascade;  -- versão antiga, com login por e-mail
@@ -386,6 +394,9 @@ begin
     if s < _minutes(h.open_time) or e > _minutes(h.close_time) then
       return format('Fora do horário de funcionamento (%s às %s).', to_char(h.open_time, 'HH24:MI'), to_char(h.close_time, 'HH24:MI'));
     end if;
+    if h.break_start is not null and int4range(s, e) && int4range(_minutes(h.break_start), _minutes(h.break_end)) then
+      return format('Horário de almoço (%s às %s). Escolha outro horário.', to_char(h.break_start, 'HH24:MI'), to_char(h.break_end, 'HH24:MI'));
+    end if;
   end if;
   if exists (
     select 1 from bookings b
@@ -455,6 +466,23 @@ begin
   return d;
 end $$;
 
+-- O horário escolhido pelo cliente está na grade? (igual a slotStarts na página)
+-- Grade de p_step minutos a partir da abertura (e da volta do almoço), mais o horário que
+-- termina exatamente no fim de cada período (ex.: corte de 40 min às 11:20 antes do almoço).
+create or replace function public._slot_ok(p_date date, p_time time, p_duration int, p_step int)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select bool_or(t >= a and t + p_duration <= b and ((t - a) % p_step = 0 or t = b - p_duration))
+    from (select _minutes(p_time) as t) x,
+    lateral (values
+      (_minutes(h.open_time), _minutes(coalesce(h.break_start, h.close_time))),
+      (_minutes(coalesce(h.break_end, h.close_time)), _minutes(h.close_time))
+    ) as per(a, b)
+    where per.b > per.a
+  ), false)
+  from business_hours h where h.weekday = extract(dow from p_date)::int;
+$$;
+
 drop function if exists public.create_booking(text, text, date, time, text, text, text);
 create or replace function public.create_booking(
   p_barber text, p_service text, p_date date, p_time time,
@@ -473,7 +501,6 @@ declare
   v_name    text := left(regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g'), 60);
   v_phone   text := regexp_replace(coalesce(p_phone, ''), '\D', '', 'g');
   v_notes   text := left(regexp_replace(btrim(coalesce(p_notes, '')), '\s+', ' ', 'g'), 200);
-  v_open    time;
   v_err     text;
   v_code    text;
   v_row     bookings;
@@ -507,8 +534,7 @@ begin
     if p_date > v_now::date + c_window then
       raise exception using errcode = 'PT400', message = format('Agendamentos são liberados para os próximos %s dias.', c_window);
     end if;
-    select open_time into v_open from business_hours where weekday = extract(dow from p_date)::int;
-    if v_open is null or (_minutes(p_time) - _minutes(v_open)) % c_step <> 0 then
+    if not coalesce(_slot_ok(p_date, p_time, v_service.duration, c_step), false) then
       raise exception using errcode = 'PT400', message = 'Horário inválido.';
     end if;
     if (select count(distinct coalesce(series_id, id)) from bookings

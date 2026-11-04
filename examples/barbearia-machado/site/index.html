@@ -551,6 +551,12 @@ body:not(.light) .bill-bar.urgent, body:not(.light) .bill-bar.last { background:
 .pix-qr svg { width: 200px; height: 200px; }
 .pix-code { font: .78rem/1.4 ui-monospace, Menlo, Consolas, monospace; word-break: break-all; resize: none; margin-top: 4px; }
 
+.recovery-box { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); }
+.recovery-box p { margin: 4px 0 10px; }
+.recovery-code { font: 700 2rem/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; text-align: center; color: var(--red-2);
+  background: var(--bg-2); border: 1px dashed var(--line); border-radius: 12px; padding: 14px; margin: 10px 0 14px; }
+.comm-key { margin-left: auto; }
+
 /* Painel em tema claro: números e dados mais fáceis de ler */
 body.light {
   --bg: #f4f2ee; --bg-2: #ffffff; --card: #ffffff; --card-2: #f2eee8; --line: #e2dbd1;
@@ -1304,7 +1310,7 @@ const BS = (() => {
       setToken('');
       return null;
     }
-    sessCache = { ...(data.role === 'admin' ? { role: 'admin' } : { role: 'barber', barberId: data.barberId }), email: data.email || '' };
+    sessCache = { ...(data.role === 'admin' ? { role: 'admin' } : { role: 'barber', barberId: data.barberId }), hasRecovery: Boolean(data.hasRecovery) };
     return sessCache;
   }
   async function requireAuth() {
@@ -1364,7 +1370,7 @@ const BS = (() => {
     }
 
     if (m === 'POST' && p === '/api/password-reset') {
-      const res = check(await sb.rpc('reset_password_with_code', { p_email: body.email, p_code: body.code, p_new_password: body.password }));
+      const res = check(await sb.rpc('reset_with_recovery_code', { p_code: body.code, p_new_password: body.password }));
       if (!res.ok) fail(400, res.message);
       return res;
     }
@@ -1386,11 +1392,15 @@ const BS = (() => {
       })));
     }
     if (m === 'POST' && p === '/api/admin/account') {
-      const res = check(await sb.rpc('update_my_account', {
-        p_current: body.current || '', p_new_password: body.newPassword || null, p_email: body.email ?? null,
-      }));
+      return check(await sb.rpc('update_my_account', { p_current: body.current || '', p_new_password: body.newPassword || '' }));
+    }
+    if (m === 'POST' && p === '/api/admin/recovery-code') {
+      const code = check(await sb.rpc('generate_recovery_code', { p_current: body.current || '' }));
       sessCache = null;
-      return res;
+      return { code };
+    }
+    if (m === 'POST' && p === '/api/admin/reset-staff-password') {
+      return { password: check(await sb.rpc('admin_reset_password', { p_staff: body.staffId })) };
     }
     if (m === 'GET' && p === '/api/admin/billing-ack') {
       return { acked: Boolean(check(await sb.rpc('billing_acked', { p_cycle: q.get('cycle') }))) };
@@ -2841,7 +2851,8 @@ const Admin = (() => {
     $('commList').innerHTML = barbers().map((b) => {
       const period = periodOf(b.id);
       return `<div class="comm" data-barber="${esc(b.id)}">
-        <div class="comm-head">${BS.avatar(b, 'sm')}<div><strong>${esc(b.name)}</strong><span>${esc(b.role)}</span></div></div>
+        <div class="comm-head">${BS.avatar(b, 'sm')}<div><strong>${esc(b.name)}</strong><span>${esc(b.role)}</span></div>
+          <button type="button" class="btn btn-ghost btn-sm comm-key" data-reset-pass="${esc(b.id)}" title="Gerar senha nova">🔑 Senha</button></div>
         <div class="comm-controls">
           <label class="pct-field">Comissão
             <span class="pct-wrap"><input class="input" type="number" min="0" max="100" step="1" inputmode="decimal" data-pct value="${rates[b.id] ?? DEFAULT_PCT}"><b>%</b></span>
@@ -2931,30 +2942,54 @@ const Admin = (() => {
 </script>
 
 <script>/* conta.js */
-/* 👤 Minha conta (trocar senha e e-mail) e "Esqueci minha senha" (código por e-mail). */
+/* 👤 Conta: trocar a senha e gerar o código de recuperação. Esqueci minha senha: código de recuperação. */
 (() => {
   if (window.CURRENT_VIEW !== 'admin') return;
   const { esc } = BS;
   const $ = (id) => document.getElementById(id);
 
+  function showCode(code) {
+    Admin.openModal(`<h2>Seu código de recuperação</h2>
+      <p class="recovery-code">${esc(code)}</p>
+      <p><strong>Tire um print desta tela</strong> ou anote. Se esquecer a senha, é com ele que você cria uma nova
+        (no login, "Esqueci minha senha"). Ele vale uma vez só.</p>
+      <div class="modal-actions"><button class="btn btn-ghost" id="rcCopy">Copiar</button><button class="btn btn-red" id="rcOk">Já guardei</button></div>`);
+    $('rcCopy').onclick = async () => {
+      try { await navigator.clipboard.writeText(code); BS.toast('Código copiado.'); } catch { BS.toast('Anote o código.', 'warn'); }
+    };
+    $('rcOk').onclick = Admin.closeModal;
+  }
+
   $('accountBtn').addEventListener('click', async () => {
     const me = await BS.api('/api/admin/me').catch(() => ({}));
     Admin.openModal(`<h2>👤 Minha conta</h2>
-      <p class="muted small">Cadastre seu e-mail para conseguir criar uma senha nova se esquecer.</p>
-      <div class="field"><label for="aEmail">E-mail</label><input class="input" id="aEmail" type="email" autocomplete="email" value="${esc(me.email || '')}" placeholder="seuemail@gmail.com"></div>
-      <div class="field"><label for="aNew">Nova senha <span class="muted">(deixe vazio para manter)</span></label><input class="input" id="aNew" type="password" autocomplete="new-password" minlength="6"></div>
       <div class="field"><label for="aCur">Senha atual</label><input class="input" id="aCur" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="aNew">Nova senha</label><input class="input" id="aNew" type="password" autocomplete="new-password" minlength="6" placeholder="Pelo menos 6 caracteres"></div>
       <p class="form-error" id="aErr"></p>
-      <div class="modal-actions"><button class="btn btn-ghost" id="aCancel">Cancelar</button><button class="btn btn-red" id="aSave">Salvar</button></div>`);
+      <div class="modal-actions"><button class="btn btn-ghost" id="aCancel">Fechar</button><button class="btn btn-red" id="aSave">Trocar senha</button></div>
+      <div class="recovery-box">
+        <strong>🔐 Código de recuperação</strong>
+        <p class="muted small">${me.hasRecovery
+    ? 'Você já tem um código guardado. Gerar outro cancela o anterior.'
+    : 'Você ainda não tem. Gere agora e guarde: é com ele que você cria uma senha nova se esquecer.'}</p>
+        <button class="btn btn-ghost btn-sm" id="aRecovery">${me.hasRecovery ? 'Gerar código novo' : 'Gerar código de recuperação'}</button>
+      </div>`);
     $('aCancel').onclick = Admin.closeModal;
     $('aSave').onclick = async () => {
       $('aErr').textContent = '';
-      if (!$('aCur').value) { $('aErr').textContent = 'Digite sua senha atual para confirmar.'; return; }
-      const changedPassword = Boolean($('aNew').value);
+      if (!$('aCur').value || !$('aNew').value) { $('aErr').textContent = 'Preencha a senha atual e a nova.'; return; }
       try {
-        await BS.api('/api/admin/account', { method: 'POST', body: { current: $('aCur').value, newPassword: $('aNew').value, email: $('aEmail').value } });
+        await BS.api('/api/admin/account', { method: 'POST', body: { current: $('aCur').value, newPassword: $('aNew').value } });
         Admin.closeModal();
-        BS.toast(changedPassword ? 'Senha alterada.' : 'Dados salvos.');
+        BS.toast('Senha alterada.');
+      } catch (err) { $('aErr').textContent = err.message; }
+    };
+    $('aRecovery').onclick = async () => {
+      $('aErr').textContent = '';
+      if (!$('aCur').value) { $('aErr').textContent = 'Digite sua senha atual (lá em cima) para gerar o código.'; $('aCur').focus(); return; }
+      try {
+        const { code } = await BS.api('/api/admin/recovery-code', { method: 'POST', body: { current: $('aCur').value } });
+        showCode(code);
       } catch (err) { $('aErr').textContent = err.message; }
     };
   });
@@ -2962,46 +2997,49 @@ const Admin = (() => {
   $('forgotLink').addEventListener('click', (e) => {
     e.preventDefault();
     Admin.openModal(`<h2>Esqueci minha senha</h2>
-      <p class="muted small">Digite o e-mail cadastrado no seu painel. Vamos mandar um código para você criar uma senha nova.</p>
-      <div class="field"><label for="fEmail">E-mail</label><input class="input" id="fEmail" type="email" autocomplete="email"></div>
-      <p class="form-error" id="fErr"></p>
-      <div class="modal-actions"><button class="btn btn-ghost" id="fCancel">Cancelar</button><button class="btn btn-red" id="fSend">Enviar código</button></div>`);
-    $('fCancel').onclick = Admin.closeModal;
-    $('fSend').onclick = async () => {
-      const email = $('fEmail').value.trim();
-      $('fErr').textContent = '';
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('fErr').textContent = 'Digite um e-mail válido.'; return; }
-      $('fSend').disabled = true;
-      try {
-        const res = await BS.fn('password-reset-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Não foi possível enviar agora. Tente de novo.');
-        codeStep(email);
-      } catch (err) {
-        $('fErr').textContent = err.message;
-        $('fSend').disabled = false;
-      }
-    };
-  });
-
-  function codeStep(email) {
-    Admin.openModal(`<h2>Criar senha nova</h2>
-      <p class="muted small">Se o e-mail <strong>${esc(email)}</strong> estiver cadastrado, o código chega em instantes (veja também o spam). Vale por 15 minutos.</p>
-      <div class="field"><label for="cCode">Código</label><input class="input" id="cCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>
-      <div class="field"><label for="cPass">Senha nova</label><input class="input" id="cPass" type="password" autocomplete="new-password" minlength="6"></div>
+      <p class="muted small">Digite o código de recuperação que você guardou (gerado em 👤 Conta) e crie uma senha nova.</p>
+      <div class="field"><label for="cCode">Código de recuperação</label><input class="input" id="cCode" autocomplete="off" autocapitalize="characters" placeholder="Ex.: 7K2P-QX9D" maxlength="12"></div>
+      <div class="field"><label for="cPass">Senha nova</label><input class="input" id="cPass" type="password" autocomplete="new-password" minlength="6" placeholder="Pelo menos 6 caracteres"></div>
       <p class="form-error" id="cErr"></p>
-      <div class="modal-actions"><button class="btn btn-ghost" id="cCancel">Cancelar</button><button class="btn btn-red" id="cSave">Salvar senha</button></div>`);
+      <p class="muted small">Não tem o código? Peça ao Adão uma senha nova (aba Comissões → 🔑).</p>
+      <div class="modal-actions"><button class="btn btn-ghost" id="cCancel">Cancelar</button><button class="btn btn-red" id="cSave">Criar senha</button></div>`);
     $('cCancel').onclick = Admin.closeModal;
     $('cSave').onclick = async () => {
       $('cErr').textContent = '';
       try {
-        await BS.api('/api/password-reset', { method: 'POST', body: { email, code: $('cCode').value, password: $('cPass').value } });
+        await BS.api('/api/password-reset', { method: 'POST', body: { code: $('cCode').value, password: $('cPass').value } });
         Admin.closeModal();
-        BS.toast('Senha criada! Entre com a senha nova.');
+        BS.toast('Senha criada! Entre com a senha nova e gere um código de recuperação novo em 👤 Conta.');
         $('password').focus();
       } catch (err) { $('cErr').textContent = err.message; }
     };
-  }
+  });
+
+  // 🔑 Dono: senha provisória para um barbeiro (botão nos cartões da aba Comissões).
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-reset-pass]');
+    if (!btn) return;
+    const barber = Admin.state.cfg.barbers.find((b) => b.id === btn.dataset.resetPass);
+    if (!barber) return;
+    const first = barber.name.split(' ')[0];
+    Admin.openModal(`<h2>🔑 Senha nova para ${esc(first)}</h2>
+      <p>A senha atual de ${esc(first)} para de funcionar e ele(a) sai do painel em todos os aparelhos.</p>
+      <div class="modal-actions"><button class="btn btn-ghost" id="rpNo">Cancelar</button><button class="btn btn-red" id="rpYes">Gerar senha nova</button></div>`);
+    $('rpNo').onclick = Admin.closeModal;
+    $('rpYes').onclick = async () => {
+      try {
+        const { password } = await BS.api('/api/admin/reset-staff-password', { method: 'POST', body: { staffId: barber.id } });
+        Admin.openModal(`<h2>🔑 Senha provisória</h2>
+          <p class="recovery-code">${esc(password)}</p>
+          <p>Passe para ${esc(first)}. Depois de entrar, ele(a) troca pela que quiser em 👤 Conta.</p>
+          <div class="modal-actions"><button class="btn btn-ghost" id="rpCopy">Copiar</button><button class="btn btn-red" id="rpOk">Pronto</button></div>`);
+        $('rpCopy').onclick = async () => {
+          try { await navigator.clipboard.writeText(password); BS.toast('Senha copiada.'); } catch { BS.toast('Anote a senha.', 'warn'); }
+        };
+        $('rpOk').onclick = Admin.closeModal;
+      } catch (err) { BS.toast(err.message, 'error'); }
+    };
+  });
 })();
 </script>
 

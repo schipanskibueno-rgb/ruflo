@@ -13,8 +13,8 @@
 --
 -- Senhas iniciais do painel (cada pessoa precisa ter uma senha diferente):
 --   Adão (dono): machado26 · Emanuel: emanuel26 · Nick: nick26 · João: joao26 · Ste: ste26
--- Cada um troca a própria senha no painel (👤 Minha conta) e, se esquecer, recebe um código
--- no e-mail cadastrado ali (envio pela função do Supabase + Brevo).
+-- Cada um troca a própria senha no painel (👤 Conta). Esqueceu? Usa o código de recuperação
+-- (gerado em 👤 Conta, vale uma vez) ou pede ao Adão uma senha nova (aba Comissões → 🔑).
 -- Para trocar uma senha, rode no SQL Editor (troque o id e a senha):
 --   update public.staff_access set pass_hash = extensions.crypt('NOVA-SENHA', extensions.gen_salt('bf'))
 --   where id = 'nick';      -- ids: adao, emanuel, nick, joao
@@ -66,18 +66,13 @@ create table if not exists public.staff_access (
   check (role = 'admin' or barber_id is not null)
 );
 
-alter table public.staff_access add column if not exists email text;
-create unique index if not exists staff_access_email_idx on public.staff_access (lower(email));
-
--- Códigos de "esqueci minha senha" (só o hash; vale 15 minutos e 5 tentativas).
-create table if not exists public.staff_password_resets (
-  id         uuid primary key default gen_random_uuid(),
-  staff_id   text not null references public.staff_access (id) on delete cascade,
-  code_hash  text not null,
-  expires_at timestamptz not null,
-  attempts   int not null default 0,
-  created_at timestamptz not null default now()
-);
+-- Código de recuperação de senha (só o hash; vale uma vez). A recuperação por e-mail saiu.
+alter table public.staff_access add column if not exists recovery_hash text;
+drop function if exists public.create_password_reset(text);
+drop function if exists public.reset_password_with_code(text, text, text);
+drop table if exists public.staff_password_resets;
+drop index if exists public.staff_access_email_idx;
+alter table public.staff_access drop column if exists email;
 
 -- Mensalidade do sistema (Pix): o dono marcou "já paguei" neste ciclo (ciclo = mês do vencimento, dia 10).
 create table if not exists public.billing_acks (
@@ -261,7 +256,6 @@ alter table public.services       enable row level security;
 alter table public.business_hours enable row level security;
 alter table public.staff_access   enable row level security;
 alter table public.staff_sessions enable row level security;
-alter table public.staff_password_resets enable row level security;
 alter table public.billing_acks enable row level security;
 alter table public.login_failures enable row level security;
 alter table public.bookings       enable row level security;
@@ -762,7 +756,7 @@ end $$;
 -- Quem está logado (pelo token do cabeçalho), ou null.
 create or replace function public.staff_me() returns jsonb
 language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('id', id, 'role', role, 'barberId', barber_id, 'email', email) from _current_staff();
+  select jsonb_build_object('id', id, 'role', role, 'barberId', barber_id, 'hasRecovery', recovery_hash is not null) from _current_staff();
 $$;
 
 -- Senha já usada por outra pessoa? (o login é só pela senha, então cada uma precisa ser única)
@@ -771,75 +765,66 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from staff_access where id <> p_except and pass_hash = extensions.crypt(p_password, pass_hash));
 $$;
 
--- 👤 Minha conta: trocar a própria senha e/ou e-mail (pede a senha atual).
-create or replace function public.update_my_account(p_current text, p_new_password text default null, p_email text default null)
+-- Código aleatório legível (sem 0/O, 1/I): ex. 7K2P-QX9D.
+create or replace function public._random_code(p_len int default 8)
+returns text language sql volatile as $$
+  select string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + (get_byte(b, i) % 32), 1), '')
+    from (select extensions.gen_random_bytes(p_len) as b) r, generate_series(0, p_len - 1) i;
+$$;
+
+-- 👤 Conta: trocar a própria senha (pede a senha atual).
+drop function if exists public.update_my_account(text, text, text);
+create or replace function public.update_my_account(p_current text, p_new_password text)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
-declare
-  v_staff staff_access;
-  v_email text := nullif(lower(btrim(coalesce(p_email, ''))), '');
+declare v_staff staff_access;
 begin
   select * into v_staff from _current_staff();
   if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
   if v_staff.pass_hash <> extensions.crypt(coalesce(p_current, ''), v_staff.pass_hash) then
     raise exception using errcode = 'PT400', message = 'Senha atual incorreta.';
   end if;
-  if coalesce(p_new_password, '') <> '' then
-    if length(p_new_password) < 6 then raise exception using errcode = 'PT400', message = 'A nova senha precisa ter pelo menos 6 caracteres.'; end if;
-    if _password_taken(p_new_password, v_staff.id) then raise exception using errcode = 'PT400', message = 'Essa senha não pode ser usada. Escolha outra.'; end if;
-    update staff_access set pass_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf')) where id = v_staff.id;
-  end if;
-  if p_email is not null then
-    if v_email is not null and v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-      raise exception using errcode = 'PT400', message = 'E-mail inválido.';
-    end if;
-    if v_email is not null and exists (select 1 from staff_access where lower(email) = v_email and id <> v_staff.id) then
-      raise exception using errcode = 'PT400', message = 'Esse e-mail já está em uso por outra pessoa.';
-    end if;
-    update staff_access set email = v_email where id = v_staff.id;
-  end if;
-  return jsonb_build_object('ok', true, 'email', (select email from staff_access where id = v_staff.id));
+  if length(coalesce(p_new_password, '')) < 6 then raise exception using errcode = 'PT400', message = 'A nova senha precisa ter pelo menos 6 caracteres.'; end if;
+  if _password_taken(p_new_password, v_staff.id) then raise exception using errcode = 'PT400', message = 'Essa senha não pode ser usada. Escolha outra.'; end if;
+  update staff_access set pass_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf')) where id = v_staff.id;
+  return jsonb_build_object('ok', true);
 end $$;
 
--- Esqueci minha senha (passo 1): só a função do Supabase (chave de serviço) chama; ela manda o código por e-mail.
-create or replace function public.create_password_reset(p_email text)
-returns jsonb language plpgsql volatile security definer set search_path = public as $$
+-- 👤 Conta: gera o código de recuperação (mostrado uma vez; o anterior deixa de valer).
+create or replace function public.generate_recovery_code(p_current text)
+returns text language plpgsql volatile security definer set search_path = public as $$
 declare
   v_staff staff_access;
   v_code  text;
 begin
-  select * into v_staff from staff_access where lower(email) = lower(btrim(coalesce(p_email, '')));
-  if not found then return null; end if;
-  if (select count(*) from staff_password_resets where staff_id = v_staff.id and created_at > now() - interval '1 hour') >= 3 then
-    return jsonb_build_object('limited', true);
+  select * into v_staff from _current_staff();
+  if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  if v_staff.pass_hash <> extensions.crypt(coalesce(p_current, ''), v_staff.pass_hash) then
+    raise exception using errcode = 'PT400', message = 'Senha atual incorreta.';
   end if;
-  v_code := lpad(((('x' || encode(extensions.gen_random_bytes(4), 'hex'))::bit(32)::bigint) % 1000000)::text, 6, '0');
-  -- O código anterior deixa de valer (fica guardado para contar o limite por hora).
-  update staff_password_resets set expires_at = least(expires_at, now()) where staff_id = v_staff.id;
-  delete from staff_password_resets where created_at < now() - interval '1 day';
-  insert into staff_password_resets (staff_id, code_hash, expires_at)
-  values (v_staff.id, extensions.crypt(v_code, extensions.gen_salt('bf')), now() + interval '15 minutes');
-  return jsonb_build_object('code', v_code, 'email', v_staff.email,
-    'name', coalesce((select name from barbers where id = v_staff.barber_id), v_staff.id));
+  v_code := _random_code(8);
+  update staff_access set recovery_hash = extensions.crypt(v_code, extensions.gen_salt('bf')) where id = v_staff.id;
+  return left(v_code, 4) || '-' || right(v_code, 4);
 end $$;
 
--- Esqueci minha senha (passo 2): código do e-mail + nova senha. Sem "raise" no erro para gravar a tentativa.
-create or replace function public.reset_password_with_code(p_email text, p_code text, p_new_password text)
+-- Esqueci minha senha: código de recuperação + senha nova. Mesma trava do login contra chute
+-- (8 erros por aparelho em 15 min). Sem "raise" no erro para gravar a tentativa errada.
+create or replace function public.reset_with_recovery_code(p_code text, p_new_password text)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
+  v_ip    text := coalesce(nullif(btrim(split_part(current_setting('request.headers', true)::json ->> 'x-forwarded-for', ',', 1)), ''), 'desconhecido');
+  v_code  text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
   v_staff staff_access;
-  v_reset staff_password_resets;
 begin
-  select * into v_staff from staff_access where lower(email) = lower(btrim(coalesce(p_email, '')));
-  if found then
-    select * into v_reset from staff_password_resets where staff_id = v_staff.id and expires_at > now() and attempts < 5
-      order by created_at desc limit 1;
+  if (select count(*) from login_failures where ip = v_ip and at > now() - interval '15 minutes') >= 8
+     or (select count(*) from login_failures where at > now() - interval '15 minutes') >= 60 then
+    return jsonb_build_object('ok', false, 'message', 'Muitas tentativas. Aguarde 15 minutos e tente de novo.');
   end if;
-  if v_reset.id is null then
-    return jsonb_build_object('ok', false, 'message', 'Código inválido ou vencido. Peça um novo.');
-  end if;
-  if v_reset.code_hash <> extensions.crypt(btrim(coalesce(p_code, '')), v_reset.code_hash) then
-    update staff_password_resets set attempts = attempts + 1 where id = v_reset.id;
-    return jsonb_build_object('ok', false, 'message', 'Código incorreto.');
+  select * into v_staff from staff_access
+    where length(v_code) = 8 and recovery_hash is not null and recovery_hash = extensions.crypt(v_code, recovery_hash)
+    limit 1;
+  if not found then
+    insert into login_failures (ip) values (v_ip);
+    return jsonb_build_object('ok', false, 'message', 'Código de recuperação incorreto.');
   end if;
   if length(coalesce(p_new_password, '')) < 6 then
     return jsonb_build_object('ok', false, 'message', 'A nova senha precisa ter pelo menos 6 caracteres.');
@@ -847,10 +832,28 @@ begin
   if _password_taken(p_new_password, v_staff.id) then
     return jsonb_build_object('ok', false, 'message', 'Essa senha não pode ser usada. Escolha outra.');
   end if;
-  update staff_access set pass_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf')) where id = v_staff.id;
-  update staff_password_resets set expires_at = now() where staff_id = v_staff.id;  -- código usado não vale de novo
-  delete from staff_sessions where staff_id = v_staff.id;  -- sai de todos os aparelhos
+  update staff_access set pass_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf')), recovery_hash = null
+   where id = v_staff.id;                                     -- o código vale uma vez só
+  delete from staff_sessions where staff_id = v_staff.id;   -- sai dos outros aparelhos
   return jsonb_build_object('ok', true);
+end $$;
+
+-- 🔑 O dono gera uma senha provisória para um barbeiro (ele troca depois em 👤 Conta).
+create or replace function public.admin_reset_password(p_staff text)
+returns text language plpgsql volatile security definer set search_path = public as $$
+declare v_pass text;
+begin
+  if not is_admin() then raise exception using errcode = 'PT403', message = 'Só o dono.'; end if;
+  if not exists (select 1 from staff_access where id = p_staff and role = 'barber') then
+    raise exception using errcode = 'PT400', message = 'Barbeiro inválido.';
+  end if;
+  loop
+    v_pass := lower(_random_code(6));
+    exit when not _password_taken(v_pass, p_staff);
+  end loop;
+  update staff_access set pass_hash = extensions.crypt(v_pass, extensions.gen_salt('bf')) where id = p_staff;
+  delete from staff_sessions where staff_id = p_staff;
+  return v_pass;
 end $$;
 
 -- Mensalidade (Pix): o dono marca "já paguei" no ciclo e o aviso para de aparecer.
@@ -905,11 +908,13 @@ grant execute on function public.update_booking(uuid, jsonb) to anon, authentica
 grant execute on function public.staff_login(text) to anon, authenticated;
 grant execute on function public.staff_me() to anon, authenticated;
 grant execute on function public.staff_logout() to anon, authenticated;
-grant execute on function public.update_my_account(text, text, text) to anon, authenticated;
-grant execute on function public.reset_password_with_code(text, text, text) to anon, authenticated;
+grant execute on function public.update_my_account(text, text) to anon, authenticated;
+grant execute on function public.generate_recovery_code(text) to anon, authenticated;
+grant execute on function public.reset_with_recovery_code(text, text) to anon, authenticated;
+grant execute on function public.admin_reset_password(text) to anon, authenticated;
+revoke execute on function public._random_code(int) from public, anon, authenticated;
 grant execute on function public.billing_ack(text) to anon, authenticated;
 grant execute on function public.billing_acked(text) to anon, authenticated;
-revoke execute on function public.create_password_reset(text) from public, anon, authenticated;
 revoke execute on function public._password_taken(text, text) from public, anon, authenticated;
 grant execute on function public.save_push_subscription(text, text, text) to anon, authenticated;
 grant execute on function public.delete_push_subscription(text) to anon, authenticated;

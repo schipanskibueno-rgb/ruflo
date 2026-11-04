@@ -8,10 +8,7 @@
 //   POST /notify     (o banco chama a cada minuto, com a senha interna)
 //   GET  /push-key   (painel: chave pública para ativar os avisos)
 //   POST /push-test  (painel: "Enviar teste" para o barbeiro logado)
-//   POST /password-reset-request  (login: "Esqueci minha senha" → código por e-mail, via Brevo)
-//
-// E-mail (opcional): Supabase → Edge Functions → Secrets: BREVO_API_KEY e EMAIL_FROM
-// (o e-mail remetente confirmado no Brevo).
+
 import webpush from 'npm:web-push@3.6.7';
 
 const TZ = 'America/Sao_Paulo';
@@ -149,16 +146,6 @@ async function runNotify(now = new Date()) {
   return { starts: starts.length, fresh: fresh.length, sent };
 }
 
-/** Manda e-mail pelo Brevo (gratuito até 300/dia; remetente confirmado no painel do Brevo). */
-async function sendEmail(to: string, subject: string, html: string) {
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': env('BREVO_API_KEY'), 'Content-Type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ sender: { email: env('EMAIL_FROM'), name: 'Barbearia Machado' }, to: [{ email: to }], subject, htmlContent: html }),
-  });
-  if (!res.ok) throw new Error(`Brevo ${res.status}: ${await res.text()}`);
-}
-
 /** Barbeiro logado no painel (pelo token da sessão), ou null. */
 async function staffFrom(req: Request) {
   const token = req.headers.get('x-staff-token') || '';
@@ -192,26 +179,6 @@ export async function handle(req: Request) {
         url: './#/admin',
       });
       return json(200, { sent });
-    }
-    if (route === 'password-reset-request' && req.method === 'POST') {
-      if (!env('BREVO_API_KEY') || !env('EMAIL_FROM')) {
-        return json(503, { error: 'Envio de e-mail ainda não configurado. Peça ao Adão para ajudar.' });
-      }
-      const { email } = await req.json().catch(() => ({}));
-      const reset = typeof email === 'string' && email.length <= 200
-        ? await db('rpc/create_password_reset', { method: 'POST', body: { p_email: email } })
-        : null;
-      if (reset?.code) {
-        await sendEmail(reset.email, `Código para nova senha: ${reset.code}`, `
-          <div style="font-family:Arial,sans-serif;max-width:420px">
-            <h2 style="color:#d42a24;margin:0 0 8px">Barbearia Machado</h2>
-            <p>Olá, ${String(reset.name).split(' ')[0]}! Seu código para criar uma nova senha do painel é:</p>
-            <p style="font-size:32px;font-weight:bold;letter-spacing:6px;margin:12px 0">${reset.code}</p>
-            <p style="color:#666">Vale por 15 minutos. Se não foi você, ignore este e-mail.</p>
-          </div>`);
-      }
-      // Mesma resposta exista ou não o e-mail (não revela quem tem cadastro).
-      return json(200, { ok: true });
     }
     return json(404, { error: 'Rota não encontrada.' });
   } catch (err) {

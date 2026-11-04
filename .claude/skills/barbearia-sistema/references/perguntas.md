@@ -16,7 +16,7 @@ padrão bom, ofereça-o como opção "(Recomendado)".
 ## Rodada 2 — Logo e cores
 
 - Peça a **logo** (de preferência PNG com fundo transparente, ou a imagem do Instagram).
-- Rode `scripts/cores_da_logo.py <logo>` e ofereça as cores sugeridas como opção:
+- Rode `python3 SKILL_DIR/scripts/cores_da_logo.py <logo>` e ofereça as cores sugeridas como opção:
   - **primária**: botões, destaques, preços em destaque (no código: variáveis `--red`);
   - **destaque**: detalhes, ícones, faixas (no código: `--copper`).
 - **Fonte dos títulos** (Google Fonts). Padrão: Oswald (condensada, combina com barbearia).
@@ -66,7 +66,7 @@ Pergunte se algum serviço merece **etiqueta** ("Mais pedido", "Mais completo", 
 - **Supabase** do cliente: URL do projeto e chave publicável (`sb_publishable_…`), e o nome com que a
   função dos avisos foi (ou será) publicada. Se ainda não existir, gere sem e preencha depois.
 - **Slug** (identificador sem espaços, minúsculo, ex.: `machado`): define a pasta
-  `examples/barbearia-<slug>/` e os nomes dos arquivos.
+  `barbearia-<slug>/` e os nomes dos arquivos.
 
 ## Antes de gerar
 

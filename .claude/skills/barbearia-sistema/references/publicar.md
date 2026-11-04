@@ -1,6 +1,6 @@
 # Publicar o sistema de uma barbearia (passo a passo para entregar ao usuário)
 
-Mande ao usuário, nesta ordem, os arquivos da pasta `examples/barbearia-<slug>/`:
+Mande ao usuário, nesta ordem, os arquivos da pasta `barbearia-<slug>/` (ou `examples/barbearia-<slug>/`):
 `supabase/schema.sql`, `supabase/functions/sistema/index.ts` e `<slug>-site.zip`.
 Explique em português simples, numerado. Não peça chaves secretas na conversa.
 

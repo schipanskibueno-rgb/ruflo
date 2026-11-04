@@ -4,7 +4,9 @@
 Uso:
     python3 gerar_sistema.py config.json [pasta-de-saída]
 
-A pasta de saída padrão é examples/barbearia-<slug>/ na raiz do repositório.
+A pasta de saída padrão é a pasta do config.json, se ela se chamar barbearia-<slug>
+(ex.: barbearia-navalha/config.json); senão, barbearia-<slug>/ na pasta atual.
+Funciona em qualquer projeto: o modelo é lido da pasta da skill, não do repositório.
 Depois rode `python3 build.py` dentro dela para gerar o arquivo único e o .zip da Netlify.
 Requer Pillow (PIL) para preparar a logo, os ícones e as fotos.
 """
@@ -18,7 +20,6 @@ from urllib.parse import quote, quote_plus
 
 SKILL = Path(__file__).resolve().parent.parent
 TEMPLATE = SKILL / 'template'
-REPO = SKILL.parent.parent.parent
 DIAS = {'dom': 0, 'seg': 1, 'ter': 2, 'qua': 3, 'qui': 4, 'sex': 5, 'sab': 6}
 PROIBIDO = re.compile(r"[<>\"\\`{}]|\$\{")
 
@@ -269,8 +270,13 @@ def gerar(cfg_path, out=None):
         falha('informe o horário de funcionamento de pelo menos um dia')
     linhas_h.sort(key=lambda x: (x[0] == 0, x[0]))
 
-    out = Path(out).resolve() if out else REPO / 'examples' / f'barbearia-{slug}'
-    if out.exists() and any(out.iterdir()) and not (out / 'agendamento.html').exists():
+    if out:
+        out = Path(out).resolve()
+    elif base.name == f'barbearia-{slug}':
+        out = base
+    else:
+        out = Path.cwd() / f'barbearia-{slug}'
+    if out != base and out.exists() and any(out.iterdir()) and not (out / 'agendamento.html').exists():
         falha(f'a pasta {out} já existe e não parece um sistema gerado; escolha outra')
     out.mkdir(parents=True, exist_ok=True)
 

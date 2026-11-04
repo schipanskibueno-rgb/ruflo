@@ -5,14 +5,22 @@ Use quando o sistema da Machado (examples/barbearia-machado) ganhar melhorias qu
 para todas as barbearias. O script troca os dados da Machado por {{CAMPOS}} e para com erro se
 algum trecho esperado mudou, para você ajustar a lista de trocas abaixo antes de seguir.
 
-Uso: python3 atualizar_modelo.py
+Uso: python3 atualizar_modelo.py [pasta-da-machado]
+    (padrão: examples/barbearia-machado do repositório ruflo, ou ./examples/barbearia-machado)
 Depois confira: python3 gerar_sistema.py ../exemplos/machado.json /tmp/x  e compare com a Machado.
 """
 import re, sys
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parent.parent
-SRC = SKILL.parent.parent.parent / 'examples' / 'barbearia-machado'
+if len(sys.argv) > 1:
+    SRC = Path(sys.argv[1]).resolve()
+else:
+    SRC = next((p for p in (SKILL.parent.parent.parent / 'examples' / 'barbearia-machado',
+                            Path.cwd() / 'examples' / 'barbearia-machado')
+                if (p / 'agendamento.html').is_file()), None)
+    if SRC is None:
+        sys.exit('informe a pasta do sistema da Machado: python3 atualizar_modelo.py <pasta>')
 DST = SKILL / 'template'
 
 def sub(text, pairs, label):

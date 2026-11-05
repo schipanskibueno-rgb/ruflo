@@ -34,7 +34,7 @@ O gerador (`scripts/gerar_sistema.py`) lê um arquivo como este. Exemplo complet
   "horarios": { "seg": ["09:00", "12:00", "13:00", "20:00"], "sab": ["08:30", "16:00"], "dom": null },
                                              // dias: seg ter qua qui sex sab dom; null/ausente = fechado
                                              // 2 horários = abre e fecha; 4 = abre, almoço, volta, fecha
-                                             // (com almoço às 12:00, um corte de 40 min tem 11:20 como último horário)
+                                             // horários de "intervalo" em "intervalo" a partir da abertura e da volta do almoço
   "barbeiros": [                             // na ordem em que aparecem; exatamente um "dono": true
     { "id": "adao", "nome": "Adão Machado", "cargo": "Barbeiro Proprietário", "dono": true,
       "senha": "machado26", "bio": "…", "foto": "originais/adao.jpg",

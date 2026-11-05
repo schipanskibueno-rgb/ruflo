@@ -467,12 +467,12 @@ begin
 end $$;
 
 -- O horário escolhido pelo cliente está na grade? (igual a slotStarts na página)
--- Grade de p_step minutos a partir da abertura (e da volta do almoço), mais o horário que
--- termina exatamente no fim de cada período (ex.: corte de 40 min às 11:20 antes do almoço).
+-- Grade de p_step minutos a partir da abertura (e da volta do almoço); o atendimento
+-- precisa terminar até o almoço ou o fechamento.
 create or replace function public._slot_ok(p_date date, p_time time, p_duration int, p_step int)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce((
-    select bool_or(t >= a and t + p_duration <= b and ((t - a) % p_step = 0 or t = b - p_duration))
+    select bool_or(t >= a and t + p_duration <= b and (t - a) % p_step = 0)
     from (select _minutes(p_time) as t) x,
     lateral (values
       (_minutes(h.open_time), _minutes(coalesce(h.break_start, h.close_time))),

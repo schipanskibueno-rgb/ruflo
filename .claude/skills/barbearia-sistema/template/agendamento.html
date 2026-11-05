@@ -1265,18 +1265,16 @@ const BS = (() => {
   // Equipe (painel): a mesma grade do dia, mas a tarde vai até meia-noite; dia fechado: 07h às 24h.
   // Qualquer outro horário pode ser digitado em "Ou outro horário".
   const STAFF_HOURS = ['07:00', '24:00'];
-  /** Inícios possíveis: grade de slotStep em cada período (manhã e tarde, se houver almoço)
-   *  e mais o último horário que termina exatamente no fim do período (ex.: corte 11:20 → 12:00).
-   *  Igual a _slot_ok no schema.sql (para o cliente). */
+  /** Inícios possíveis: grade de slotStep em cada período (manhã e tarde, se houver almoço),
+   *  sempre com o mesmo intervalo entre um horário e outro. Igual a _slot_ok no schema.sql. */
   function slotStarts(hours, duration, step, free) {
     let periods = !hours ? [] : hours.length > 2 ? [[hours[0], hours[2]], [hours[3], hours[1]]] : [[hours[0], hours[1]]];
     if (free) periods = periods.length ? periods.map((x, i) => (i === periods.length - 1 ? [x[0], STAFF_HOURS[1]] : x)) : [STAFF_HOURS];
     const starts = new Set();
-    periods.forEach(([x, y], i) => {
+    for (const [x, y] of periods) {
       const a = toMin(x), b = toMin(y);
       for (let s = a; s + duration <= b; s += step) starts.add(s);
-      if (!(free && i === periods.length - 1) && b - duration >= a) starts.add(b - duration);
-    });
+    }
     return [...starts].sort((x, y) => x - y);
   }
   function freeSlots(cfg, date, duration, barberId, busy, excludeId, free = false) {

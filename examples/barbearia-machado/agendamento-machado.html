@@ -1286,16 +1286,19 @@ const BS = (() => {
   // Equipe (painel): a mesma grade do dia, mas a tarde vai até meia-noite; dia fechado: 07h às 24h.
   // Qualquer outro horário pode ser digitado em "Ou outro horário".
   const STAFF_HOURS = ['07:00', '24:00'];
-  /** Inícios possíveis: grade de slotStep em cada período (manhã e tarde, se houver almoço),
-   *  sempre com o mesmo intervalo entre um horário e outro. Igual a _slot_ok no schema.sql. */
+  /** Inícios possíveis (igual a _slot_ok no schema.sql): grade de slotStep a partir da abertura
+   *  e da volta do almoço. Antes do almoço o atendimento termina até o almoço, e entra também o
+   *  horário que termina exatamente nele (corte 11:20 → 12:00). No último período do dia vale
+   *  todo horário da grade que começa antes do fechamento (fecha 20h → último 19:40). */
   function slotStarts(hours, duration, step, free) {
     let periods = !hours ? [] : hours.length > 2 ? [[hours[0], hours[2]], [hours[3], hours[1]]] : [[hours[0], hours[1]]];
     if (free) periods = periods.length ? periods.map((x, i) => (i === periods.length - 1 ? [x[0], STAFF_HOURS[1]] : x)) : [STAFF_HOURS];
     const starts = new Set();
-    for (const [x, y] of periods) {
-      const a = toMin(x), b = toMin(y);
-      for (let s = a; s + duration <= b; s += step) starts.add(s);
-    }
+    periods.forEach(([x, y], i) => {
+      const a = toMin(x), b = toMin(y), last = i === periods.length - 1;
+      for (let s = a; last ? s < b && s + duration <= 24 * 60 : s + duration <= b; s += step) starts.add(s);
+      if (!last && b - duration >= a) starts.add(b - duration);
+    });
     return [...starts].sort((x, y) => x - y);
   }
   function freeSlots(cfg, date, duration, barberId, busy, excludeId, free = false) {

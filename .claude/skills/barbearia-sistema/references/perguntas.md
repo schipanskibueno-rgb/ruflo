@@ -37,8 +37,9 @@ padrão bom, ofereça-o como opção "(Recomendado)".
 - Horário de abertura e fechamento de **cada dia da semana** (seg a dom) e quais dias fecha.
 - **Intervalo entre os horários** (de 30 em 30, de 40 em 40 min…): normalmente a duração do corte.
 - **Intervalo de almoço** (ex.: 12:00 às 13:00) e em quais dias. O cliente não marca nesse período;
-  os horários seguem o intervalo a partir da abertura e da volta do almoço, e o atendimento
-  precisa terminar até o almoço (ex.: 7:00 de 40 em 40 → último corte da manhã 11:00).
+  os horários seguem o intervalo a partir da abertura e da volta do almoço; antes do almoço entra
+  o horário que termina exatamente nele (corte de 40 min → 11:20). O último horário do dia é o
+  último da grade que começa antes do fechamento (fecha 20:00, de 40 em 40 → 19:40).
 - Lembre: o cliente só agenda dentro desse horário; os barbeiros, pelo painel, podem marcar em
   qualquer dia e hora.
 

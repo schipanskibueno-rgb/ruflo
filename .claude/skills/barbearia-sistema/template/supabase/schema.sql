@@ -391,7 +391,8 @@ begin
     if not found then
       return 'A barbearia não abre neste dia.';
     end if;
-    if s < _minutes(h.open_time) or e > _minutes(h.close_time) then
+    -- o último atendimento pode começar até antes do fechamento e terminar um pouco depois
+    if s < _minutes(h.open_time) or s >= _minutes(h.close_time) or e > 24 * 60 then
       return format('Fora do horário de funcionamento (%s às %s).', to_char(h.open_time, 'HH24:MI'), to_char(h.close_time, 'HH24:MI'));
     end if;
     if h.break_start is not null and int4range(s, e) && int4range(_minutes(h.break_start), _minutes(h.break_end)) then
@@ -467,17 +468,19 @@ begin
 end $$;
 
 -- O horário escolhido pelo cliente está na grade? (igual a slotStarts na página)
--- Grade de p_step minutos a partir da abertura (e da volta do almoço); o atendimento
--- precisa terminar até o almoço ou o fechamento.
+-- Grade de p_step minutos a partir da abertura (e da volta do almoço). Antes do almoço o
+-- atendimento termina até o almoço, e vale também o horário que termina exatamente nele
+-- (corte de 40 min às 11:20). No último período vale todo horário da grade antes do fechamento.
 create or replace function public._slot_ok(p_date date, p_time time, p_duration int, p_step int)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce((
-    select bool_or(t >= a and t + p_duration <= b and (t - a) % p_step = 0)
+    select bool_or(case when ultimo then t >= a and t < b and (t - a) % p_step = 0
+                        else t >= a and t + p_duration <= b and ((t - a) % p_step = 0 or t = b - p_duration) end)
     from (select _minutes(p_time) as t) x,
     lateral (values
-      (_minutes(h.open_time), _minutes(coalesce(h.break_start, h.close_time))),
-      (_minutes(coalesce(h.break_end, h.close_time)), _minutes(h.close_time))
-    ) as per(a, b)
+      (_minutes(h.open_time), _minutes(coalesce(h.break_start, h.close_time)), h.break_start is null),
+      (_minutes(coalesce(h.break_end, h.close_time)), _minutes(h.close_time), true)
+    ) as per(a, b, ultimo)
     where per.b > per.a
   ), false)
   from business_hours h where h.weekday = extract(dow from p_date)::int;

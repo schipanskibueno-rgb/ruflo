@@ -478,6 +478,17 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .earn p { margin: 4px 0 0; color: var(--muted); font-size: .88rem; }
 .earn .last { text-align: right; }
 .earn .last b { display: block; color: var(--text); font-size: 1.05rem; }
+.earn { display: block; text-align: center; }
+.ec-head { margin: 0 0 14px; color: var(--muted); font-size: 1rem; font-weight: 600; }
+.ec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 12px; }
+.ec-item small { display: block; color: var(--text); font-size: .9rem; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.ec-item b { display: block; font: 700 1.9rem/1.2 var(--font-head); color: var(--text); margin-top: 2px; }
+.ec-item b i { font-style: normal; font-size: .55em; font-weight: 600; color: var(--muted); }
+.ec-why { margin-top: 16px; font-size: .9rem; }
+.ec-why summary { cursor: pointer; list-style: none; color: var(--text); }
+.ec-why summary::-webkit-details-marker { display: none; }
+.ec-why summary span { color: var(--copper-2); text-decoration: underline; }
+.ec-why ul { text-align: left; margin: 10px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.5; }
 
 /* comissões */
 .comm-pay { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
@@ -1306,7 +1317,7 @@ const BS = (() => {
     id: r.id, code: r.code, serviceId: r.service_id, serviceName: r.service_name, price: Number(r.price),
     duration: r.duration, barberId: r.barber_id, barberName: r.barber_name, date: r.date, time: r.time.slice(0, 5),
     name: r.name, phone: r.phone, notes: r.notes, status: r.status, source: r.source, createdAt: r.created_at,
-    history: r.history || [], seriesId: r.series_id, completedAt: r.completed_at,
+    history: r.history || [], seriesId: r.series_id, completedAt: r.completed_at, encaixe: Boolean(r.encaixe),
   });
   const fromBlock = (b) => ({
     id: b.id, date: b.date, start: b.start_time.slice(0, 5), end: b.end_time.slice(0, 5), allDay: b.all_day,
@@ -1403,6 +1414,7 @@ const BS = (() => {
       return withPrice(check(await sb.rpc('create_booking', {
         p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
         p_name: body.name, p_phone: body.phone, p_notes: body.notes || '', p_repeat: Boolean(body.repeat),
+        p_force: Boolean(body.force),
       })));
     }
     if (m === 'POST' && p === '/api/admin/account') {
@@ -2003,7 +2015,7 @@ const Admin = (() => {
       <div class="bk-time"><strong>${esc(b.time)}</strong><span>até ${esc(endTime(b.time, b.duration))}</span>
         ${showDate ? `<span>${esc(BS.fmtDateShort(b.date))}</span>` : ''}</div>
       <div class="bk-info">
-        <strong>${esc(b.name)}</strong> <span class="status ${b.status}">${STATUS_LABEL[b.status]}</span>${b.seriesId ? ' <span class="status serie" title="Agendamento recorrente">🔁 mensal</span>' : ''}
+        <strong>${esc(b.name)}</strong> <span class="status ${b.status}">${STATUS_LABEL[b.status]}</span>${b.seriesId ? ' <span class="status serie" title="Agendamento recorrente">🔁 mensal</span>' : ''}${b.encaixe ? ' <span class="status serie" title="Marcado por cima de outro horário">⤵ encaixe</span>' : ''}
         <div class="line"><span class="who-b">✂ ${esc(b.barberName)}</span><span>${esc(b.serviceName)}</span><span>${b.price ? brl(b.price) : 'a consultar'}</span><span>${esc(BS.fmtPhone(b.phone))}</span><span>#${esc(b.code)}</span></div>
         ${b.notes ? `<div class="note">“${esc(b.notes)}”</div>` : ''}
       </div>
@@ -2205,14 +2217,19 @@ const Admin = (() => {
     $('nTime').oninput = () => { time = $('nTime').value; };
     $('nCancel').onclick = closeModal;
     $('nSave').onclick = async () => {
+      const body = {
+        barberId: $('nBarber').value, serviceId: $('nService').value, date: $('nDate').value, time,
+        name: $('nName').value, phone: $('nPhone').value, notes: $('nNotes').value, repeat: $('nRepeat').checked,
+      };
       try {
-        const created = await call('/api/admin/bookings', {
-          method: 'POST',
-          body: {
-            barberId: $('nBarber').value, serviceId: $('nService').value, date: $('nDate').value, time,
-            name: $('nName').value, phone: $('nPhone').value, notes: $('nNotes').value, repeat: $('nRepeat').checked,
-          },
-        });
+        let created;
+        try {
+          created = await call('/api/admin/bookings', { method: 'POST', body });
+        } catch (err) {
+          // Horário já ocupado: a equipe pode encaixar (ex.: terminou o corte mais cedo).
+          if (err.status !== 428 || !window.confirm(err.message)) throw err;
+          created = await call('/api/admin/bookings', { method: 'POST', body: { ...body, force: true } });
+        }
         closeModal();
         const extra = (created.repeatDates || []).length - 1;
         const skipped = (created.repeatSkipped || []).length;
@@ -2305,6 +2322,13 @@ const Admin = (() => {
   }
 
   function kpis(list) {
+    if (!Admin.isOwner()) { // barbeiro: os valores ficam no quadro de comissão; aqui só cancelados/faltas
+      const cancelled = list.filter((b) => b.status === 'cancelado').length;
+      const noShow = list.filter((b) => b.status === 'faltou').length;
+      $('kpis').innerHTML = `<div class="kpi"><small>Cancelados / faltas</small><strong>${cancelled} / ${noShow}</strong>
+        <span>${list.length ? `${Math.round(((cancelled + noShow) / list.length) * 100)}% do total` : '—'}</span></div>`;
+      return;
+    }
     const done = list.filter((b) => b.status === 'concluido');
     const sched = list.filter((b) => b.status === 'agendado');
     const revenue = done.reduce((s, b) => s + b.price, 0);
@@ -2394,22 +2418,50 @@ const Admin = (() => {
 
   const fmtWhen = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  /** Barbeiro logado: quanto tem a receber desde o último pagamento, pela % que o dono definiu. */
+  /** Barbeiro logado: comissão pela % que o dono definiu (dia, mês, semana e mês com os agendados). */
   async function earnings() {
     if (Admin.isOwner()) {
       $('earnPanel').hidden = true;
       return;
     }
-    const [sum, payouts] = await Promise.all([Admin.call('/api/admin/commission-summary'), Admin.call('/api/admin/payouts')]);
+    const t = Admin.today();
+    const d = BS.parseDate(t);
+    const monthFrom = BS.isoDate(new Date(d.getFullYear(), d.getMonth(), 1));
+    const monthTo = BS.isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    const weekFrom = BS.addDays(t, -((d.getDay() + 6) % 7)); // segunda-feira
+    const weekTo = BS.addDays(weekFrom, 6);
+    const [sum, list, payouts] = await Promise.all([
+      Admin.call('/api/admin/commission-summary'),
+      Admin.bookings(weekFrom < monthFrom ? weekFrom : monthFrom, weekTo > monthTo ? weekTo : monthTo),
+      Admin.call('/api/admin/payouts'),
+    ]);
+    const meId = Admin.state.me.barberId;
+    const barber = Admin.state.cfg.barbers.find((b) => b.id === meId) || {};
+    const mine = list.filter((b) => b.barberId === meId);
+    const done = mine.filter((b) => b.status === 'concluido');
+    const live = mine.filter((b) => b.status === 'concluido' || b.status === 'agendado');
+    const com = (arr) => arr.reduce((s, b) => s + b.price, 0) * sum.pct / 100;
+    const inMonth = (b) => b.date >= monthFrom && b.date <= monthTo;
+    const box = (label, value) => `<div class="ec-item"><small>${label}</small><b><i>R$</i> ${esc(brl(value).replace(/^R\$\s*/, ''))}</b></div>`;
     const last = payouts[0];
     $('earnPanel').hidden = false;
-    $('earnPanel').innerHTML = `<div>
-        <small>Para receber até hoje</small>
-        <strong>${brl(sum.amount)}</strong>
-        <p>${sum.count} atendimento(s) concluído(s) · ${brl(sum.gross)} faturado · ${sum.pct}% definido {{PELO_DONO}}
-          · desde ${sum.since ? fmtWhen(sum.since) : 'o início'}</p>
+    $('earnPanel').innerHTML = `
+      <p class="ec-head">${esc(String(sum.pct))}% · ${esc(barber.name || '')}${barber.role ? ` — ${esc(barber.role)}` : ''}</p>
+      <div class="ec-grid">
+        ${box('comissão dia', com(done.filter((b) => b.date === t)))}
+        ${box('acumulado mês', com(done.filter((b) => b.date >= monthFrom && b.date <= t)))}
+        ${box('total semana', com(live.filter((b) => b.date >= weekFrom && b.date <= weekTo)))}
+        ${box('total mês', com(live.filter(inMonth)))}
       </div>
-      ${last ? `<div class="last"><small>Último pagamento</small><b>${brl(last.amount)}</b><p>${esc(fmtWhen(last.paidAt))}</p></div>` : ''}`;
+      <details class="ec-why"><summary>valores parecem errados? <span>saiba porque</span></summary>
+        <ul>
+          <li><b>Comissão dia</b> e <b>acumulado mês</b>: só atendimentos marcados como <b>concluído</b> (hoje / do dia 1º até hoje).</li>
+          <li><b>Total semana</b> (segunda a domingo) e <b>total mês</b>: concluídos + agendados ainda em aberto.</li>
+          <li>Tudo com ${esc(String(sum.pct))}% definido {{PELO_DONO}} sobre o valor do serviço. Cancelados e faltas não contam.</li>
+          <li>Se um atendimento não aparece, marque-o como concluído na agenda.</li>
+          ${last ? `<li>Último pagamento recebido: <b>${brl(last.amount)}</b> em ${esc(fmtWhen(last.paidAt))}.</li>` : ''}
+        </ul>
+      </details>`;
   }
 
   async function load() {

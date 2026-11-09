@@ -171,13 +171,19 @@ create table if not exists public.bookings (
   source       text not null default 'site',
   history      jsonb not null default '[]',
   created_at   timestamptz not null default now(),
+  encaixe      boolean not null default false,
   span         tsrange generated always as (tsrange(date + time, date + time + make_interval(mins => duration))) stored,
-  -- Trava no banco: o mesmo barbeiro nunca fica com dois horários sobrepostos.
+  -- Trava no banco: o mesmo barbeiro nunca fica com dois horários sobrepostos
+  -- (menos o encaixe, que só a equipe marca pelo painel, confirmando).
   constraint bookings_no_overlap exclude using gist (barber_id with =, span with &&)
-    where (status in ('agendado', 'concluido'))
+    where (status in ('agendado', 'concluido') and not encaixe)
 );
 -- Colunas adicionadas depois (rodar de novo atualiza bancos antigos).
 alter table public.bookings add column if not exists series_id uuid;            -- agendamento recorrente (todo mês)
+alter table public.bookings add column if not exists encaixe boolean not null default false; -- marcado por cima de outro (painel)
+alter table public.bookings drop constraint if exists bookings_no_overlap;
+alter table public.bookings add constraint bookings_no_overlap exclude using gist (barber_id with =, span with &&)
+  where (status in ('agendado', 'concluido') and not encaixe);
 alter table public.bookings add column if not exists completed_at timestamptz;  -- quando foi marcado como concluído
 update public.bookings set completed_at = (date + time) at time zone 'America/Sao_Paulo'
   where status = 'concluido' and completed_at is null;
@@ -421,7 +427,8 @@ language sql stable as $$
     'price', b.price, 'duration', b.duration, 'barberId', b.barber_id, 'barberName', b.barber_name,
     'date', to_char(b.date, 'YYYY-MM-DD'), 'time', to_char(b.time, 'HH24:MI'), 'name', b.name,
     'phone', b.phone, 'notes', b.notes, 'status', b.status, 'source', b.source,
-    'createdAt', b.created_at, 'history', b.history, 'seriesId', b.series_id, 'completedAt', b.completed_at);
+    'createdAt', b.created_at, 'history', b.history, 'seriesId', b.series_id, 'completedAt', b.completed_at,
+    'encaixe', b.encaixe);
 $$;
 
 -- Intervalos ocupados de um dia (sem dados pessoais). barber_id null = barbearia toda.
@@ -503,9 +510,13 @@ end $$;
 revoke all on function public._notify_now() from public, anon, authenticated;
 
 drop function if exists public.create_booking(text, text, date, time, text, text, text);
+drop function if exists public.create_booking(text, text, date, time, text, text, text, boolean);
+-- p_force (só equipe): marca como encaixe mesmo se o horário já tem atendimento
+-- (ex.: o corte das 13:00 acabou 13:20 e chegou cliente 13:25). O cliente do site nunca encaixa.
 create or replace function public.create_booking(
   p_barber text, p_service text, p_date date, p_time time,
-  p_name text, p_phone text, p_notes text default '', p_repeat boolean default false
+  p_name text, p_phone text, p_notes text default '', p_repeat boolean default false,
+  p_force boolean default false
 ) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -521,6 +532,8 @@ declare
   v_phone   text := regexp_replace(coalesce(p_phone, ''), '\D', '', 'g');
   v_notes   text := left(regexp_replace(btrim(coalesce(p_notes, '')), '\s+', ' ', 'g'), 200);
   v_err     text;
+  v_conf    text;
+  v_encaixe boolean := false;
   v_code    text;
   v_row     bookings;
   v_series  uuid;
@@ -545,7 +558,29 @@ begin
       raise exception using errcode = 'PT400', message = 'Barbeiro inválido.';
     end if;
     v_err := _placement_error(p_date, p_time, v_service.duration, v_barber, null, true);
-    if v_err is not null then raise exception using errcode = 'PT409', message = v_err; end if;
+    if v_err is not null then
+      -- só atendimento no caminho (sem bloqueio, antes da meia-noite): oferece o encaixe
+      select string_agg(split_part(b.name, ' ', 1) || ' ' || to_char(b.time, 'HH24:MI') || '–'
+               || to_char(b.time + make_interval(mins => b.duration), 'HH24:MI'), ', ' order by b.time)
+        into v_conf
+        from bookings b
+       where b.date = p_date and b.barber_id = v_barber and b.status in ('agendado', 'concluido')
+         and int4range(_minutes(b.time), _minutes(b.time) + b.duration)
+             && int4range(_minutes(p_time), _minutes(p_time) + v_service.duration);
+      if v_conf is null or _minutes(p_time) + v_service.duration > 24 * 60 or exists (
+        select 1 from blocks bl
+         where bl.date = p_date and (bl.barber_id is null or bl.barber_id = v_barber)
+           and int4range(_minutes(bl.start_time), _minutes(bl.end_time))
+               && int4range(_minutes(p_time), _minutes(p_time) + v_service.duration)
+      ) then
+        raise exception using errcode = 'PT409', message = v_err;
+      end if;
+      if not coalesce(p_force, false) then
+        raise exception using errcode = 'PT428',
+          message = format('Esse horário já tem atendimento (%s). Marcar como encaixe mesmo assim?', v_conf);
+      end if;
+      v_encaixe := true;
+    end if;
   else
     if p_date < v_now::date or (p_date = v_now::date and p_time <= v_now::time) then
       raise exception using errcode = 'PT409', message = 'Esse horário já passou. Escolha outro.';
@@ -578,9 +613,10 @@ begin
   v_code := _new_booking_code();
   begin
     insert into bookings (code, service_id, service_name, price, duration, barber_id, barber_name,
-                          date, time, name, phone, notes, source, series_id)
+                          date, time, name, phone, notes, source, series_id, encaixe)
     select v_code, v_service.id, v_service.name, v_service.price, v_service.duration, b.id, b.name,
-           p_date, p_time, v_name, v_phone, v_notes, case when v_staff.id is null then 'site' else 'painel' end, v_series
+           p_date, p_time, v_name, v_phone, v_notes, case when v_staff.id is null then 'site' else 'painel' end, v_series,
+           v_encaixe
       from barbers b where b.id = v_barber
     returning * into v_row;
   exception when exclusion_violation then
@@ -946,7 +982,7 @@ $$;
 revoke execute on function public._placement_error(date, time, int, text, uuid, boolean) from public, anon, authenticated;
 revoke execute on function public._current_staff() from public, anon, authenticated;
 grant execute on function public.busy_intervals(date) to anon, authenticated;
-grant execute on function public.create_booking(text, text, date, time, text, text, text, boolean) to anon, authenticated;
+grant execute on function public.create_booking(text, text, date, time, text, text, text, boolean, boolean) to anon, authenticated;
 grant execute on function public.cancel_series(uuid, date) to anon, authenticated;
 grant execute on function public.commission_summary(text) to anon, authenticated;
 grant execute on function public.close_commission(text) to anon, authenticated;

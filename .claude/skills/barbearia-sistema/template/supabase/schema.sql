@@ -1036,3 +1036,6 @@ begin
 exception when others then
   raise warning 'Avisos automáticos não foram agendados (%). No Supabase: Database → Extensions → ative pg_cron e pg_net e rode este arquivo de novo.', sqlerrm;
 end $$;
+
+-- Avisa a API do Supabase para ler as funções novas na hora (evita "Could not find the function").
+notify pgrst, 'reload schema';

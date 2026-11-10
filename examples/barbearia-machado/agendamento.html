@@ -1222,6 +1222,7 @@ const BS = (() => {
     if (code === 'PT401') sessCache = null;
     if (/^PT\d{3}$/.test(code)) fail(Number(code.slice(2)), error.message);
     if (code === '23P01') fail(409, 'Esse horário conflita com outro agendamento deste barbeiro.');
+    if (code === 'PGRST202') fail(500, 'O banco do sistema está desatualizado. No Supabase, rode o schema.sql novo (SQL Editor → Run).');
     if (code === '42501' || code === 'PGRST301') fail(403, 'Sem permissão para isso.');
     if (/fetch|network/i.test(error.message || '')) fail(503, 'Sem conexão. Verifique sua internet.');
     fail(400, error.message || 'Algo deu errado. Tente novamente.');
@@ -1422,7 +1423,8 @@ const BS = (() => {
       return withPrice(check(await sb.rpc('create_booking', {
         p_barber: body.barberId, p_service: body.serviceId, p_date: body.date, p_time: body.time,
         p_name: body.name, p_phone: body.phone, p_notes: body.notes || '', p_repeat: Boolean(body.repeat),
-        p_force: Boolean(body.force),
+        // só manda p_force no encaixe: assim agendar normal funciona mesmo com o banco ainda sem atualizar
+        ...(body.force ? { p_force: true } : {}),
       })));
     }
     if (m === 'POST' && p === '/api/admin/account') {

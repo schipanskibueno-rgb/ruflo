@@ -489,6 +489,28 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .ec-item b i { font-style: normal; font-size: .55em; font-weight: 600; color: var(--muted); }
 .ec-why { margin-top: 16px; font-size: .9rem; }
 .ec-why { margin: 16px 0 0; color: var(--text); }
+/* aba Ajustes */
+.aj-cat { margin: 16px 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+.aj-svc { display: grid; grid-template-columns: minmax(160px, 1fr) 110px 120px auto auto; gap: 8px; align-items: end; padding: 10px 0; border-top: 1px solid var(--line); }
+.aj-svc label, .aj-day label, .aj-info label, .aj-step { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); }
+.aj-svc .input, .aj-day .input, .aj-info .input { padding: 9px 10px; }
+.aj-svc .aj-on { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 10px; color: var(--text); font-size: .85rem; }
+.aj-svc.off .aj-name { opacity: .55; }
+.aj-svc small.aj-hint { display: block; font-size: .72rem; color: var(--muted); }
+.aj-day { display: grid; grid-template-columns: 110px repeat(4, minmax(90px, 1fr)); gap: 8px; align-items: end; padding: 8px 0; border-top: 1px solid var(--line); }
+.aj-day.closed label:not(.aj-open) { opacity: .4; }
+.aj-day .aj-open { flex-direction: row; align-items: center; gap: 8px; padding-bottom: 10px; color: var(--text); font-size: .92rem; font-weight: 600; }
+.aj-step { margin: 14px 0 6px; max-width: 260px; }
+.aj-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }
+.aj-info .aj-wide { grid-column: span 3; }
+@media (max-width: 700px) {
+  .aj-svc { grid-template-columns: 1fr 1fr; }
+  .aj-svc .aj-name { grid-column: span 2; }
+  .aj-day { grid-template-columns: 1fr 1fr; }
+  .aj-day .aj-open { grid-column: span 2; padding-bottom: 0; }
+  .aj-info { grid-template-columns: 1fr 1fr; }
+  .aj-info .aj-wide { grid-column: span 2; }
+}
 .ec-link { background: none; border: 0; padding: 0; font: inherit; color: var(--copper-2); text-decoration: underline; cursor: pointer; }
 .ec-help ul { margin: 0 0 6px; padding-left: 18px; color: var(--muted); line-height: 1.55; }
 
@@ -667,9 +689,9 @@ body.light .booking-main, body.light .calendar { box-shadow: 0 1px 2px rgba(40, 
     <header class="logo-head">
       <img src="img/logo.jpg" data-light-src="img/logo-badge.webp" alt="Barbearia Machado — Especialista em prótese capilar">
       <nav class="quick-links">
-        <a href="https://wa.me/5542999653210" target="_blank" rel="noopener" aria-label="WhatsApp"><svg><use href="#i-wa"/></svg></a>
-        <a href="https://www.instagram.com/barbearia_machado_27/" target="_blank" rel="noopener" aria-label="Instagram"><svg><use href="#i-insta"/></svg></a>
-        <a href="https://www.google.com/maps/dir/?api=1&amp;destination=R.+Cel.+Oleg%C3%A1rio+de+Macedo,+134,+%C3%81gua+Suja,+Castro+-+PR,+84165-690" target="_blank" rel="noopener" aria-label="Como chegar"><svg><use href="#i-pin"/></svg></a>
+        <a id="qWa" href="https://wa.me/5542999653210" target="_blank" rel="noopener" aria-label="WhatsApp"><svg><use href="#i-wa"/></svg></a>
+        <a id="qInsta" href="https://www.instagram.com/barbearia_machado_27/" target="_blank" rel="noopener" aria-label="Instagram"><svg><use href="#i-insta"/></svg></a>
+        <a id="qMaps" href="https://www.google.com/maps/dir/?api=1&amp;destination=R.+Cel.+Oleg%C3%A1rio+de+Macedo,+134,+%C3%81gua+Suja,+Castro+-+PR,+84165-690" target="_blank" rel="noopener" aria-label="Como chegar"><svg><use href="#i-pin"/></svg></a>
         <a href="#" data-install hidden aria-label="Instalar o app" title="Instalar o app"><svg><use href="#i-download"/></svg></a>
         <button type="button" class="theme-btn" data-theme-toggle aria-label="Mudar tema"><svg class="i-sun"><use href="#i-sun"/></svg><svg class="i-moon"><use href="#i-moon"/></svg></button>
       </nav>
@@ -758,7 +780,7 @@ body.light .booking-main, body.light .calendar { box-shadow: 0 1px 2px rgba(40, 
           <div><dt>Valor</dt><dd id="tPrice"></dd></div>
           <div><dt>Duração</dt><dd id="tDuration"></dd></div>
           <div class="full" id="tRepeatRow" hidden><dt>🔁 Todo mês</dt><dd id="tRepeat"></dd></div>
-          <div class="full"><dt>Endereço</dt><dd>R. Cel. Olegário de Macedo, 134 – Água Suja, Castro – PR</dd></div>
+          <div class="full"><dt>Endereço</dt><dd id="tAddress">R. Cel. Olegário de Macedo, 134 – Água Suja, Castro – PR</dd></div>
         </dl>
         <p class="ticket-print">📸 Tire um print desta tela</p>
       </div>
@@ -772,7 +794,7 @@ body.light .booking-main, body.light .calendar { box-shadow: 0 1px 2px rgba(40, 
           <a class="btn btn-ghost" id="gcal" target="_blank" rel="noopener">📅 Salvar na agenda</a>
           <a class="btn btn-ghost" href="#/agendar">+ Novo agendamento</a>
         </div>
-        <p class="muted center small">Cancelar ou remarcar: <a href="https://wa.me/5542999653210" target="_blank" rel="noopener">(42) 99965-3210</a></p>
+        <p class="muted center small">Cancelar ou remarcar: <a id="cancelWa" href="https://wa.me/5542999653210" target="_blank" rel="noopener">(42) 99965-3210</a></p>
       </div>
     </section>
   </main>
@@ -817,6 +839,7 @@ body.light .booking-main, body.light .calendar { box-shadow: 0 1px 2px rgba(40, 
           <button data-tab="bloqueios"><span class="t-ico">⛔</span>Bloqueios</button>
           <button data-tab="galeria"><span class="t-ico">🖼️</span>Galeria</button>
           <button data-tab="comissoes" id="tabComissoes" hidden><span class="t-ico">💰</span>Comissões</button>
+          <button data-tab="ajustes"><span class="t-ico">⚙️</span>Ajustes</button>
         </nav>
         <div class="top-actions">
           <span class="who" id="whoLabel"></span>
@@ -963,6 +986,46 @@ body.light .booking-main, body.light .calendar { box-shadow: 0 1px 2px rgba(40, 
         <p class="muted small">Defina a % de cada barbeiro. Entram só atendimentos concluídos, pelo valor cobrado. Ao pagar, toque em “Pagar e zerar” para a contagem recomeçar.</p>
         <div class="comm-list" id="commList"></div>
         <div class="comm-total"><span>Total a pagar aos barbeiros</span><strong id="commTotal">R$ 0,00</strong></div>
+      </section>
+
+      <!-- AJUSTES (toda a equipe; vale para todos) -->
+      <section class="tab" id="tab-ajustes" hidden>
+        <div class="page-head"><h1>Ajustes da barbearia</h1></div>
+        <p class="muted small">O que for salvo aqui vale na hora para todos: no site dos clientes e no painel de toda a equipe.</p>
+        <p class="muted small" id="ajChanges"></p>
+
+        <div class="panel aj-block">
+          <h3>✂ Serviços, preços e duração</h3>
+          <p class="muted small">A duração é o tempo que o serviço ocupa na agenda (ex.: 90 = 1h30). Desativado: some para o cliente.
+            Para um atendimento só, ajuste o término em Agenda → Detalhes.</p>
+          <div id="ajServices"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="ajNewSvc">+ Novo serviço</button>
+        </div>
+
+        <div class="panel aj-block">
+          <h3>🕘 Horário de funcionamento</h3>
+          <p class="muted small">Dias sem marcação ficam fechados. Almoço é opcional. O cliente só vê horários dentro disso; a equipe marca a qualquer hora pelo painel.</p>
+          <div id="ajHours"></div>
+          <label class="aj-step">Intervalo entre os horários oferecidos
+            <select class="input" id="ajStep"></select></label>
+          <p class="form-error" id="ajHoursErr"></p>
+          <button type="button" class="btn btn-red" id="ajHoursSave">Salvar horários</button>
+        </div>
+
+        <div class="panel aj-block">
+          <h3>📍 Endereço e contato</h3>
+          <div class="aj-info">
+            <label class="aj-wide">Rua e número <input class="input" id="ajRua" maxlength="80"></label>
+            <label>Bairro <input class="input" id="ajBairro" maxlength="80"></label>
+            <label>Cidade <input class="input" id="ajCidade" maxlength="80"></label>
+            <label>UF <input class="input" id="ajUf" maxlength="2"></label>
+            <label>CEP <input class="input" id="ajCep" maxlength="9" inputmode="numeric"></label>
+            <label>WhatsApp <input class="input" id="ajWhats" maxlength="20" inputmode="tel"></label>
+            <label>Instagram <input class="input" id="ajInsta" maxlength="40" placeholder="@perfil"></label>
+          </div>
+          <p class="form-error" id="ajInfoErr"></p>
+          <button type="button" class="btn btn-red" id="ajInfoSave">Salvar endereço e contato</button>
+        </div>
       </section>
     </main>
     <div class="credit" data-credit></div>
@@ -1251,6 +1314,32 @@ const BS = (() => {
 
   // ----------------------------------------------------------- configuração
   let cfgPromise;
+  /** Endereço e contato salvos na aba Ajustes → campos usados pela página. */
+  function contactFrom(info) {
+    if (!info || !info.rua) return {};
+    let digits = String(info.whatsapp || '').replace(/\D/g, '');
+    if (digits.length <= 11) digits = `55${digits}`;
+    const city = `${info.cidade} – ${info.uf}${info.cep ? `, ${info.cep}` : ''}`;
+    return {
+      phone: digits,
+      phoneDisplay: info.whatsapp,
+      address: `${info.rua}${info.bairro ? ` – ${info.bairro}` : ''}`,
+      city,
+      instagram: String(info.instagram || '').replace(/^@/, ''),
+      mapsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        [info.rua, info.bairro, `${info.cidade} - ${info.uf}`, info.cep].filter(Boolean).join(', '))}`,
+    };
+  }
+  /** Atualiza os links fixos da página (WhatsApp, Instagram, mapa, endereço do comprovante). */
+  function applyContact(cfg) {
+    const set = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
+    set('qWa', (el) => { el.href = `https://wa.me/${cfg.phone}`; });
+    set('cancelWa', (el) => { el.href = `https://wa.me/${cfg.phone}`; el.textContent = cfg.phoneDisplay; });
+    if (cfg.instagram) set('qInsta', (el) => { el.href = `https://www.instagram.com/${cfg.instagram}/`; });
+    if (cfg.mapsUrl) set('qMaps', (el) => { el.href = cfg.mapsUrl; });
+    set('tAddress', (el) => { el.textContent = `${cfg.address}, ${cfg.city.replace(/,\s*\d{5}-?\d{3}$/, '')}`; });
+  }
+
   function loadConfig() {
     if (!configured) return Promise.reject(new Error('Agendamento ainda não configurado.'));
     cfgPromise ||= Promise.all([
@@ -1258,12 +1347,17 @@ const BS = (() => {
       sb.from('services').select('*').eq('active', true).order('sort'),
       sb.from('business_hours').select('*'),
       sb.rpc('system_status'),
-    ]).then(([barbers, services, hours, status]) => {
+      sb.from('shop_settings').select('key, value'), // endereço, contato e intervalo editados em Ajustes
+    ]).then(([barbers, services, hours, status, settings]) => {
       const list = check(services).map((s) => ({
         id: s.id, cat: s.cat, name: s.name, price: Number(s.price), duration: s.duration, desc: s.description, tag: s.tag,
       }));
-      return {
+      const st = Object.fromEntries((settings && !settings.error && settings.data ? settings.data : []).map((r) => [r.key, r.value]));
+      const cfg = {
         ...SITE,
+        ...contactFrom(st.info),
+        slotStep: Number(st.slot_step) || SITE.slotStep,
+        info: st.info || null,
         barbers: check(barbers).map((b) => ({ id: b.id, name: b.name, role: b.role, owner: b.owner, photo: BARBER_PHOTOS[b.id] || b.photo, bio: b.bio })),
         services: list,
         categories: [...new Set(list.map((s) => s.cat))],
@@ -1272,6 +1366,8 @@ const BS = (() => {
           ...(h.break_start && h.break_end ? [h.break_start.slice(0, 5), h.break_end.slice(0, 5)] : [])]])),
         blocked: Boolean(status && !status.error && status.data && status.data.blocked),
       };
+      applyContact(cfg);
+      return cfg;
     }).catch((err) => {
       cfgPromise = null;
       throw err;
@@ -1476,6 +1572,41 @@ const BS = (() => {
       return check(await req).map((r) => ({ id: r.id, barberId: r.barber_id, since: r.since, paidAt: r.paid_at,
         pct: Number(r.pct), count: r.count, gross: Number(r.gross), amount: Number(r.amount) }));
     }
+    // ---- aba Ajustes (qualquer pessoa da equipe; salva para todos)
+    if (m === 'GET' && p === '/api/admin/settings') {
+      const [services, hours, settings] = await Promise.all([
+        sb.from('services').select('*').order('sort'),
+        sb.from('business_hours').select('*').order('weekday'),
+        sb.from('shop_settings').select('*'),
+      ]);
+      if (settings.error) fail(500, 'O banco do sistema está desatualizado. No Supabase, rode o schema.sql novo (SQL Editor → Run).');
+      const st = Object.fromEntries(settings.data.map((r) => [r.key, r]));
+      return {
+        services: check(services).map((s) => ({ ...s, price: Number(s.price) })),
+        hours: check(hours).map((h) => ({ weekday: h.weekday, open: h.open_time.slice(0, 5), close: h.close_time.slice(0, 5),
+          breakStart: h.break_start ? h.break_start.slice(0, 5) : '', breakEnd: h.break_end ? h.break_end.slice(0, 5) : '' })),
+        step: Number(st.slot_step ? st.slot_step.value : SITE.slotStep),
+        info: st.info ? st.info.value : null,
+        changes: ['info', 'slot_step', 'services_log'].filter((k) => st[k] && st[k].updated_by)
+          .map((k) => ({ key: k, by: st[k].updated_by, at: st[k].updated_at })),
+      };
+    }
+    if (m === 'POST' && p === '/api/admin/services') {
+      const r = check(await sb.rpc('staff_save_service', { p: body }));
+      cfgPromise = null;
+      return r;
+    }
+    if (m === 'POST' && p === '/api/admin/hours') {
+      const r = check(await sb.rpc('staff_save_hours', { p_days: body.days, p_step: Number(body.step) }));
+      cfgPromise = null;
+      return r;
+    }
+    if (m === 'POST' && p === '/api/admin/info') {
+      const r = check(await sb.rpc('staff_save_info', { p: body }));
+      cfgPromise = null;
+      return r;
+    }
+
     if (m === 'PATCH' && tail('/api/admin/bookings/')) {
       return withPrice(check(await sb.rpc('update_booking', { p_id: tail('/api/admin/bookings/'), p_patch: body })));
     }
@@ -1989,7 +2120,7 @@ const Admin = (() => {
   function switchTab(tab) {
     if (!state.loaders[tab] || (tab === 'comissoes' && !isOwner())) tab = 'painel';
     state.tab = tab;
-    $('barberBar').hidden = !isOwner() || tab === 'comissoes';
+    $('barberBar').hidden = !isOwner() || tab === 'comissoes' || tab === 'ajustes';
     for (const b of $('tabs').children) b.classList.toggle('active', b.dataset.tab === tab);
     for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== `tab-${tab}`;
     refresh();
@@ -2171,22 +2302,62 @@ const Admin = (() => {
     load();
   }
 
+  /** <option>s dos serviços por categoria; o atual entra mesmo se estiver desativado. */
+  function serviceOptions(selected, selectedName) {
+    const list = state.cfg.services;
+    const extra = selected && !list.some((s) => s.id === selected)
+      ? `<option value="${esc(selected)}" selected>${esc(selectedName || selected)}</option>` : '';
+    return extra + state.cfg.categories.map((cat) => `<optgroup label="${esc(cat)}">${list.filter((s) => s.cat === cat)
+      .map((s) => `<option value="${esc(s.id)}"${s.id === selected ? ' selected' : ''}>${esc(s.name)} — ${esc(BS.fmtDuration(s.duration))}</option>`).join('')}</optgroup>`).join('');
+  }
+
   function openDetails(b) {
     const hist = (b.history || []).map((h) => `<li>${esc(new Date(h.at).toLocaleString('pt-BR'))} — ${esc(h.action)}${h.to ? `: ${esc(h.from)} → ${esc(h.to)}` : ''}</li>`).join('');
     openModal(`<h2>Detalhes</h2>${summaryLine(b)}
       <p class="small muted">Código #${esc(b.code)} · ${esc(BS.fmtPhone(b.phone))} · origem: ${esc(b.source || 'site')} · criado em ${esc(new Date(b.createdAt).toLocaleString('pt-BR'))}</p>
+      <div class="field"><label for="dService">Serviço</label><select class="input" id="dService">${serviceOptions(b.serviceId, b.serviceName)}</select></div>
       <div class="row-2">
+        <div class="field"><label for="dEnd">Termina às <small class="muted">(começa ${esc(b.time)})</small></label>
+          <input type="time" class="input" id="dEnd" step="300" value="${esc(endTime(b.time, b.duration))}">
+          <small class="muted" id="dDur">${esc(BS.fmtDuration(b.duration))}</small></div>
         <div class="field"><label for="dPrice">Valor cobrado (R$)</label><input type="number" min="0" step="0.01" class="input" id="dPrice" value="${b.price}"></div>
-        <div class="field"><label>Status</label><div><span class="status ${b.status}">${STATUS_LABEL[b.status]}</span></div></div>
       </div>
+      <div class="field"><label>Status</label><div><span class="status ${b.status}">${STATUS_LABEL[b.status]}</span>${b.encaixe ? ' <span class="status serie">⤵ encaixe</span>' : ''}</div></div>
       <div class="field"><label for="dNotes">Observações</label><textarea class="input" id="dNotes" maxlength="200">${esc(b.notes)}</textarea></div>
       ${hist ? `<label class="small muted">Histórico</label><ul class="history">${hist}</ul>` : ''}
       <p class="form-error" id="dErr"></p>
       <div class="modal-actions"><button class="btn btn-ghost" id="dClose">Fechar</button><button class="btn btn-red" id="dSave">Salvar</button></div>`);
     $('dClose').onclick = closeModal;
+    const durOf = () => {
+      const end = $('dEnd').value;
+      if (!/^\d{2}:\d{2}$/.test(end)) return null;
+      let d = BS.toMin(end) - BS.toMin(b.time);
+      if (d <= 0) d += 24 * 60; // passou da meia-noite
+      return d;
+    };
+    const showDur = () => { const d = durOf(); $('dDur').textContent = d ? BS.fmtDuration(d) : ''; };
+    $('dEnd').oninput = showDur;
+    // trocou o serviço: sugere o preço e a duração dele (dá para ajustar antes de salvar)
+    $('dService').onchange = () => {
+      const sv = state.cfg.services.find((x) => x.id === $('dService').value);
+      if (!sv) return;
+      $('dPrice').value = sv.price;
+      $('dEnd').value = endTime(b.time, sv.duration);
+      showDur();
+    };
     $('dSave').onclick = async () => {
+      const body = { price: $('dPrice').value, notes: $('dNotes').value };
+      if ($('dService').value !== b.serviceId) body.serviceId = $('dService').value;
+      const dur = durOf();
+      if (!dur || dur < 5 || dur > 600) { $('dErr').textContent = 'Confira o horário de término.'; return; }
+      if (dur !== b.duration) body.duration = dur;
       try {
-        await patch(b, { price: $('dPrice').value, notes: $('dNotes').value }, 'Alterações salvas.');
+        try {
+          await patch(b, body, 'Alterações salvas.');
+        } catch (err) {
+          if (err.status !== 428 || !window.confirm(err.message)) throw err;
+          await patch(b, { ...body, force: true }, 'Alterações salvas (encaixe).');
+        }
         closeModal();
       } catch (err) { $('dErr').textContent = err.message; }
     };
@@ -3037,6 +3208,148 @@ const Admin = (() => {
 })();
 </script>
 
+<script>/* admin-ajustes.js */
+(() => {
+  if (window.CURRENT_VIEW !== 'admin') return;
+  const { esc, brl } = BS;
+  const $ = (id) => document.getElementById(id);
+  const DAYS = [[1, 'Segunda'], [2, 'Terça'], [3, 'Quarta'], [4, 'Quinta'], [5, 'Sexta'], [6, 'Sábado'], [0, 'Domingo']];
+  const STEPS = [10, 15, 20, 30, 40, 45, 50, 60, 90, 120];
+  let data = null;
+
+  const afterSave = async (msg) => {
+    BS.toast(msg);
+    Admin.state.cfg = await BS.config(); // o resto do painel já usa os valores novos
+    await load();
+  };
+
+  function renderServices() {
+    const cats = [...new Set(data.services.map((s) => s.cat))];
+    $('ajServices').innerHTML = cats.map((cat) => `<p class="aj-cat">${esc(cat)}</p>` + data.services.filter((s) => s.cat === cat).map((s) => `
+      <div class="aj-svc${s.active ? '' : ' off'}" data-id="${esc(s.id)}">
+        <label class="aj-name">Nome <input class="input" data-f="name" maxlength="60" value="${esc(s.name)}"></label>
+        <label>Preço (R$) <input class="input" data-f="price" type="number" min="0" step="0.01" value="${s.price}"></label>
+        <label>Duração (min) <input class="input" data-f="duration" type="number" min="5" max="600" step="5" value="${s.duration}">
+          <small class="aj-hint">${esc(BS.fmtDuration(s.duration))}</small></label>
+        <label class="aj-on"><input type="checkbox" data-f="active"${s.active ? ' checked' : ''}> Ativo</label>
+        <button type="button" class="btn btn-red btn-sm" data-save>Salvar</button>
+      </div>`).join('')).join('');
+  }
+
+  function renderHours() {
+    const by = Object.fromEntries(data.hours.map((h) => [h.weekday, h]));
+    $('ajHours').innerHTML = DAYS.map(([wd, label]) => {
+      const h = by[wd];
+      return `<div class="aj-day${h ? '' : ' closed'}" data-wd="${wd}">
+        <label class="aj-open"><input type="checkbox" data-f="open"${h ? ' checked' : ''}> ${label}</label>
+        <label>Abre <input class="input" type="time" step="300" data-f="o" value="${h ? h.open : '09:00'}"></label>
+        <label>Almoço de <input class="input" type="time" step="300" data-f="bs" value="${h ? h.breakStart : ''}"></label>
+        <label>até <input class="input" type="time" step="300" data-f="be" value="${h ? h.breakEnd : ''}"></label>
+        <label>Fecha <input class="input" type="time" step="300" data-f="c" value="${h ? h.close : '20:00'}"></label>
+      </div>`;
+    }).join('');
+    const steps = STEPS.includes(data.step) ? STEPS : [...STEPS, data.step].sort((a, b) => a - b);
+    $('ajStep').innerHTML = steps.map((m) => `<option value="${m}"${m === data.step ? ' selected' : ''}>de ${m} em ${m} min</option>`).join('');
+  }
+
+  function renderInfo() {
+    const i = data.info || {};
+    $('ajRua').value = i.rua || ''; $('ajBairro').value = i.bairro || ''; $('ajCidade').value = i.cidade || '';
+    $('ajUf').value = i.uf || ''; $('ajCep').value = i.cep || ''; $('ajWhats').value = i.whatsapp || '';
+    $('ajInsta').value = i.instagram ? `@${i.instagram}` : '';
+  }
+
+  function renderChanges() {
+    const names = Object.fromEntries(Admin.state.cfg.barbers.map((b) => [b.id, b.name.split(' ')[0]]));
+    const what = { info: 'endereço/contato', slot_step: 'horários', services_log: 'serviços' };
+    $('ajChanges').textContent = data.changes.length ? 'Últimas alterações: ' + data.changes
+      .sort((a, b) => (a.at < b.at ? 1 : -1))
+      .map((c) => `${what[c.key]} por ${names[c.by] || c.by} em ${new Date(c.at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`)
+      .join(' · ') : '';
+  }
+
+  async function load() {
+    data = await Admin.call('/api/admin/settings');
+    renderServices(); renderHours(); renderInfo(); renderChanges();
+  }
+
+  // serviços: salvar uma linha
+  $('ajServices').addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-f="duration"]');
+    if (inp) inp.parentElement.querySelector('.aj-hint').textContent = Number(inp.value) >= 5 ? BS.fmtDuration(Number(inp.value)) : '';
+  });
+  $('ajServices').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-save]');
+    if (!btn) return;
+    const row = btn.closest('.aj-svc');
+    const f = (k) => row.querySelector(`[data-f="${k}"]`);
+    btn.disabled = true;
+    try {
+      await Admin.call('/api/admin/services', { method: 'POST', body: {
+        id: row.dataset.id, name: f('name').value, price: f('price').value, duration: f('duration').value, active: f('active').checked,
+      } });
+      await afterSave('Serviço salvo para todos.');
+    } catch (err) { BS.toast(err.message, 'error'); } finally { btn.disabled = false; }
+  });
+
+  // serviços: novo
+  $('ajNewSvc').addEventListener('click', () => {
+    const cats = [...new Set(data.services.map((s) => s.cat))];
+    Admin.openModal(`<h2>Novo serviço</h2>
+      <div class="field"><label for="nsName">Nome</label><input class="input" id="nsName" maxlength="60" placeholder="Ex.: Prótese manutenção completa"></div>
+      <div class="field"><label for="nsCat">Categoria</label><input class="input" id="nsCat" maxlength="40" list="nsCats" value="${esc(cats[0] || '')}">
+        <datalist id="nsCats">${cats.map((c) => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      <div class="row-2">
+        <div class="field"><label for="nsPrice">Preço (R$, 0 = a consultar)</label><input class="input" id="nsPrice" type="number" min="0" step="0.01" value="0"></div>
+        <div class="field"><label for="nsDur">Duração (min)</label><input class="input" id="nsDur" type="number" min="5" max="600" step="5" value="40"></div>
+      </div>
+      <div class="field"><label for="nsDesc">Descrição (aparece para o cliente)</label><input class="input" id="nsDesc" maxlength="160"></div>
+      <p class="form-error" id="nsErr"></p>
+      <div class="modal-actions"><button class="btn btn-ghost" id="nsCancel">Cancelar</button><button class="btn btn-red" id="nsSave">Criar serviço</button></div>`);
+    $('nsCancel').onclick = Admin.closeModal;
+    $('nsSave').onclick = async () => {
+      try {
+        await Admin.call('/api/admin/services', { method: 'POST', body: {
+          name: $('nsName').value, cat: $('nsCat').value, price: $('nsPrice').value, duration: $('nsDur').value, description: $('nsDesc').value,
+        } });
+        Admin.closeModal();
+        await afterSave('Serviço criado para todos.');
+      } catch (err) { $('nsErr').textContent = err.message; }
+    };
+  });
+
+  // horários
+  $('ajHours').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-f="open"]');
+    if (cb) cb.closest('.aj-day').classList.toggle('closed', !cb.checked);
+  });
+  $('ajHoursSave').addEventListener('click', async () => {
+    $('ajHoursErr').textContent = '';
+    const days = [...document.querySelectorAll('#ajHours .aj-day')].filter((d) => d.querySelector('[data-f="open"]').checked).map((d) => {
+      const v = (k) => d.querySelector(`[data-f="${k}"]`).value;
+      return { weekday: Number(d.dataset.wd), open: v('o'), close: v('c'), breakStart: v('bs'), breakEnd: v('be') };
+    });
+    try {
+      await Admin.call('/api/admin/hours', { method: 'POST', body: { days, step: $('ajStep').value } });
+      await afterSave('Horários salvos para todos.');
+    } catch (err) { $('ajHoursErr').textContent = err.message; }
+  });
+
+  // endereço e contato
+  $('ajInfoSave').addEventListener('click', async () => {
+    $('ajInfoErr').textContent = '';
+    try {
+      await Admin.call('/api/admin/info', { method: 'POST', body: {
+        rua: $('ajRua').value, bairro: $('ajBairro').value, cidade: $('ajCidade').value, uf: $('ajUf').value,
+        cep: $('ajCep').value, whatsapp: $('ajWhats').value, instagram: $('ajInsta').value,
+      } });
+      await afterSave('Endereço e contato salvos para todos.');
+    } catch (err) { $('ajInfoErr').textContent = err.message; }
+  });
+
+  Admin.register('ajustes', load);
+})();
+</script>
 <script>/* conta.js */
 /* 👤 Conta: trocar a senha e gerar o código de recuperação. Esqueci minha senha: código de recuperação. */
 (() => {

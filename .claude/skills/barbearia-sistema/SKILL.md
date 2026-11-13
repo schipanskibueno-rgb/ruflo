@@ -13,9 +13,13 @@ O que é do desenvolvedor fica igual em todos: crédito no rodapé e Pix da mens
 
 - **Cliente**: escolhe barbeiro (com foto) → serviço → dia/horário → dados; comprovante; WhatsApp;
   salvar na agenda; agendamento "todo mês"; tema claro/escuro; app instalável com a logo.
-- **Barbeiro**: agenda própria, marca em qualquer horário pelo painel, avisos no celular
-  ("Agora: Carlos — 14:00", "Novo agendamento"), quanto tem a receber, troca de senha e código de
-  recuperação.
+- **Barbeiro**: agenda própria, marca em qualquer horário pelo painel (com encaixe por cima de um
+  horário ocupado), troca serviço e horário de término de um atendimento, avisos no celular
+  ("Agora: Carlos — 14:00", "Novo agendamento"), quadro de comissão (dia, mês, semana), troca de
+  senha e código de recuperação.
+- **Aba Ajustes (toda a equipe)**: serviços (nome, preço, duração, ativo, novo), horário de
+  funcionamento com almoço, intervalo entre horários, endereço e contato. Salva no banco e vale
+  para todos na hora; mostra quem mudou por último.
 - **Dono(a)**: agenda de todos, clientes, bloqueios, galeria, comissões (% por barbeiro, pagar e
   zerar, senha provisória para barbeiro), lembrete de pagar a equipe no último dia do mês e
   mensalidade do sistema por Pix (dia 30 ao dia 10, botão "Já paguei" a partir do dia 6).

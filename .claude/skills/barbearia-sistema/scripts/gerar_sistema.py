@@ -11,6 +11,7 @@ Depois rode `python3 build.py` dentro dela para gerar o arquivo único e o .zip 
 Requer Pillow (PIL) para preparar a logo, os ícones e as fotos.
 """
 import colorsys
+import hashlib
 import json
 import re
 import shutil
@@ -350,7 +351,14 @@ def gerar(cfg_path, out=None):
     primeiro = lambda n: n.split()[0]  # noqa: E731
     senhas_txt = ' · '.join(f'{primeiro(b["nome"])}{" (dono)" if b.get("dono") else ""}: {b["senha"]}' for b in barbeiros)
     outro = next((b['id'] for b in barbeiros if not b.get('dono')), barbeiros[0]['id'])
-    campos_sql = {**campos, 'SQL_BARBEIROS': sql_barb, 'SQL_SERVICOS': sql_serv, 'SQL_HORARIOS': sql_hor, 'SQL_EQUIPE': sql_eq,
+    # Endereço/contato iniciais (depois a equipe edita na aba Ajustes) e versão do cadastro:
+    # serviços e horários só são regravados quando o config.json muda (ver schema.sql).
+    info_json = json.dumps({'rua': rua, 'bairro': bairro, 'cidade': cidade, 'uf': uf, 'cep': cep,
+                            'whatsapp': wa_vis, 'instagram': insta}, ensure_ascii=False).replace("'", "''")
+    seed_versao = slug + '-' + hashlib.md5(json.dumps([servicos, horarios, intervalo], sort_keys=True,
+                                                      ensure_ascii=False).encode()).hexdigest()[:10]
+    campos_sql_extra = {'INFO_JSON': info_json, 'SEED_VERSAO': seed_versao}
+    campos_sql = {**campos, **campos_sql_extra, 'SQL_BARBEIROS': sql_barb, 'SQL_SERVICOS': sql_serv, 'SQL_HORARIOS': sql_hor, 'SQL_EQUIPE': sql_eq,
                   'SENHAS_COMENTARIO': senhas_txt, 'ID_EXEMPLO': outro, 'IDS_EQUIPE': ', '.join(b['id'] for b in barbeiros)}
 
     def preenche(src, dst, valores):

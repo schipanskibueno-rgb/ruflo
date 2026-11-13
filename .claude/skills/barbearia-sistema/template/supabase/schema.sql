@@ -64,6 +64,18 @@ do $$ begin
     or (break_start > open_time and break_end > break_start and close_time > break_end));
 exception when duplicate_object then null; end $$;
 
+-- Configurações que a equipe edita no painel (aba Ajustes): endereço e contato ('info'),
+-- intervalo entre os horários ('slot_step'). Todos leem; só se grava pelas funções staff_save_*.
+create table if not exists public.shop_settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+alter table public.shop_settings enable row level security;
+drop policy if exists "leitura publica" on public.shop_settings;
+create policy "leitura publica" on public.shop_settings for select using (true);
+
 -- Quem acessa o painel: uma senha por pessoa (guardada só como hash).
 drop table if exists public.staff cascade;  -- versão antiga, com login por e-mail
 create table if not exists public.staff_access (
@@ -509,6 +521,28 @@ exception when others then
 end $$;
 revoke all on function public._notify_now() from public, anon, authenticated;
 
+-- Atendimentos que ocupam o intervalo ("Carlos 13:00–13:40, ..."), ou null se nenhum.
+create or replace function public._conflicts(p_date date, p_time time, p_duration int, p_barber text, p_exclude uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select string_agg(split_part(b.name, ' ', 1) || ' ' || to_char(b.time, 'HH24:MI') || '–'
+           || to_char(b.time + make_interval(mins => b.duration), 'HH24:MI'), ', ' order by b.time)
+    from bookings b
+   where b.date = p_date and b.barber_id = p_barber and b.status in ('agendado', 'concluido')
+     and b.id is distinct from p_exclude
+     and int4range(_minutes(b.time), _minutes(b.time) + b.duration)
+         && int4range(_minutes(p_time), _minutes(p_time) + p_duration);
+$$;
+
+-- Há bloqueio (folga, compromisso) no intervalo?
+create or replace function public._blocked(p_date date, p_time time, p_duration int, p_barber text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from blocks bl
+     where bl.date = p_date and (bl.barber_id is null or bl.barber_id = p_barber)
+       and int4range(_minutes(bl.start_time), _minutes(bl.end_time))
+           && int4range(_minutes(p_time), _minutes(p_time) + p_duration));
+$$;
+
 drop function if exists public.create_booking(text, text, date, time, text, text, text);
 drop function if exists public.create_booking(text, text, date, time, text, text, text, boolean);
 -- p_force (só equipe): marca como encaixe mesmo se o horário já tem atendimento
@@ -520,7 +554,7 @@ create or replace function public.create_booking(
 ) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
-  c_step   constant int := {{INTERVALO}};  -- intervalo da grade de horários (min)
+  c_step   constant int := coalesce((select (value #>> '{}')::int from public.shop_settings where key = 'slot_step'), {{INTERVALO}});  -- intervalo da grade (min), editável em Ajustes
   c_window constant int := 30;  -- dias liberados para o cliente
   c_max    constant int := 3;   -- horários em aberto por telefone (anti-spam; série recorrente conta 1)
   c_months constant int := 6;   -- meses criados de uma vez num agendamento recorrente
@@ -560,19 +594,9 @@ begin
     v_err := _placement_error(p_date, p_time, v_service.duration, v_barber, null, true);
     if v_err is not null then
       -- só atendimento no caminho (sem bloqueio, antes da meia-noite): oferece o encaixe
-      select string_agg(split_part(b.name, ' ', 1) || ' ' || to_char(b.time, 'HH24:MI') || '–'
-               || to_char(b.time + make_interval(mins => b.duration), 'HH24:MI'), ', ' order by b.time)
-        into v_conf
-        from bookings b
-       where b.date = p_date and b.barber_id = v_barber and b.status in ('agendado', 'concluido')
-         and int4range(_minutes(b.time), _minutes(b.time) + b.duration)
-             && int4range(_minutes(p_time), _minutes(p_time) + v_service.duration);
-      if v_conf is null or _minutes(p_time) + v_service.duration > 24 * 60 or exists (
-        select 1 from blocks bl
-         where bl.date = p_date and (bl.barber_id is null or bl.barber_id = v_barber)
-           and int4range(_minutes(bl.start_time), _minutes(bl.end_time))
-               && int4range(_minutes(p_time), _minutes(p_time) + v_service.duration)
-      ) then
+      v_conf := _conflicts(p_date, p_time, v_service.duration, v_barber, null);
+      if v_conf is null or _minutes(p_time) + v_service.duration > 24 * 60
+         or _blocked(p_date, p_time, v_service.duration, v_barber) then
         raise exception using errcode = 'PT409', message = v_err;
       end if;
       if not coalesce(p_force, false) then
@@ -665,6 +689,10 @@ declare
   v_err    text;
   v_price  numeric;
   v_status text := p_patch ->> 'status';
+  v_service services;
+  v_dur    int;
+  v_check  boolean := false;  -- mudou dia, hora, barbeiro ou duração: conferir se cabe
+  v_conf   text;
 begin
   select * into v_staff from _current_staff();
   if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
@@ -676,14 +704,39 @@ begin
   end if;
 
   begin
+    -- Troca de serviço (ex.: marcou "cabelo" e era "cabelo e barba"): leva nome, duração e
+    -- preço do serviço novo, a não ser que o patch traga a duração ou o preço.
+    if p_patch ? 'serviceId' and p_patch ->> 'serviceId' <> b.service_id then
+      select * into v_service from services where id = p_patch ->> 'serviceId';
+      if not found then raise exception using errcode = 'PT400', message = 'Serviço inválido.'; end if;
+      b.history := b.history || jsonb_build_array(jsonb_build_object(
+        'at', now(), 'action', 'serviço trocado', 'from', b.service_name, 'to', v_service.name));
+      b.service_id := v_service.id; b.service_name := v_service.name;
+      if not p_patch ? 'price' then b.price := v_service.price; end if;
+      if not p_patch ? 'duration' and v_service.duration <> b.duration then
+        b.duration := v_service.duration; v_check := true;
+      end if;
+    end if;
+    -- Duração do atendimento (ex.: prótese das 8:30 às 10:00 = 90 min)
+    if p_patch ? 'duration' then
+      v_dur := (p_patch ->> 'duration')::int;
+      if v_dur is null or v_dur < 5 or v_dur > 600 then
+        raise exception using errcode = 'PT400', message = 'Duração inválida (de 5 min a 10 h).';
+      end if;
+      if v_dur <> b.duration then
+        b.history := b.history || jsonb_build_array(jsonb_build_object(
+          'at', now(), 'action', 'duração', 'from', b.duration || ' min', 'to', v_dur || ' min'));
+        b.duration := v_dur; v_check := true;
+      end if;
+    end if;
+
     if p_patch ? 'date' or p_patch ? 'time' or p_patch ? 'barberId' then
       v_date := coalesce((p_patch ->> 'date')::date, b.date);
       v_time := coalesce((p_patch ->> 'time')::time, b.time);
       v_barber := case when v_staff.role = 'barber' then b.barber_id else coalesce(p_patch ->> 'barberId', b.barber_id) end;
       select name into v_name from barbers where id = v_barber;
       if v_name is null then raise exception using errcode = 'PT400', message = 'Barbeiro inválido.'; end if;
-      v_err := _placement_error(v_date, v_time, b.duration, v_barber, b.id, true);
-      if v_err is not null then raise exception using errcode = 'PT409', message = v_err; end if;
+      v_check := true;
       b.history := b.history || jsonb_build_array(jsonb_build_object(
         'at', now(), 'action', 'remarcado',
         'from', to_char(b.date, 'YYYY-MM-DD') || ' ' || to_char(b.time, 'HH24:MI') || case when v_barber <> b.barber_id then ' (' || b.barber_name || ')' else '' end,
@@ -696,10 +749,7 @@ begin
       if v_status not in ('agendado', 'concluido', 'cancelado', 'faltou') then
         raise exception using errcode = 'PT400', message = 'Status inválido.';
       end if;
-      if v_status = 'agendado' and b.status <> 'agendado' then
-        v_err := _placement_error(b.date, b.time, b.duration, b.barber_id, b.id, true);
-        if v_err is not null then raise exception using errcode = 'PT409', message = v_err; end if;
-      end if;
+      if v_status = 'agendado' and b.status <> 'agendado' then v_check := true; end if;
       if v_status <> b.status then
         b.history := b.history || jsonb_build_array(jsonb_build_object('at', now(), 'action', v_status, 'from', b.status));
         b.status := v_status;
@@ -715,14 +765,34 @@ begin
       if v_price is null or v_price < 0 or v_price > 10000 then raise exception using errcode = 'PT400', message = 'Valor inválido.'; end if;
       b.price := round(v_price, 2);
     end if;
-  exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then
+  exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow
+            or numeric_value_out_of_range then
     raise exception using errcode = 'PT400', message = 'Valor inválido.';
   end;
+
+  -- Cabe na agenda? Se só um atendimento estiver no caminho, a equipe pode confirmar o encaixe.
+  if v_check and b.status in ('agendado', 'concluido') then
+    v_err := _placement_error(b.date, b.time, b.duration, b.barber_id, b.id, true);
+    if v_err is null then
+      b.encaixe := false;
+    else
+      v_conf := _conflicts(b.date, b.time, b.duration, b.barber_id, b.id);
+      if v_conf is null or _minutes(b.time) + b.duration > 24 * 60 or _blocked(b.date, b.time, b.duration, b.barber_id) then
+        raise exception using errcode = 'PT409', message = v_err;
+      end if;
+      if not coalesce((p_patch ->> 'force')::boolean, false) then
+        raise exception using errcode = 'PT428',
+          message = format('Esse horário já tem atendimento (%s). Salvar como encaixe mesmo assim?', v_conf);
+      end if;
+      b.encaixe := true;
+    end if;
+  end if;
 
   begin
     update bookings set date = b.date, time = b.time, barber_id = b.barber_id, barber_name = b.barber_name,
                         status = b.status, notes = b.notes, price = b.price, history = b.history,
-                        completed_at = b.completed_at
+                        completed_at = b.completed_at, service_id = b.service_id,
+                        service_name = b.service_name, duration = b.duration, encaixe = b.encaixe
       where id = b.id returning * into b;
   exception when exclusion_violation then
     raise exception using errcode = 'PT409', message = 'Esse horário conflita com outro agendamento deste barbeiro.';
@@ -978,7 +1048,144 @@ returns void language sql volatile security definer set search_path = public as 
   delete from push_subscriptions where endpoint = p_endpoint and staff_id in (select id from _current_staff());
 $$;
 
+-- ----------------------------------------------------------------- aba Ajustes (equipe)
+-- Qualquer pessoa da equipe logada edita; vale para todos na hora. Quem mudou fica registrado.
+create or replace function public._staff_required() returns staff_access
+language plpgsql stable security definer set search_path = public as $$
+declare v staff_access;
+begin
+  select * into v from _current_staff();
+  if not found then raise exception using errcode = 'PT401', message = 'Faça login para continuar.'; end if;
+  perform _require_active();
+  return v;
+end $$;
+
+-- Cria ou altera um serviço: {id?, cat, name, price, duration, description, active}.
+create or replace function public.staff_save_service(p jsonb)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access := _staff_required();
+  v_id    text := nullif(btrim(coalesce(p ->> 'id', '')), '');
+  v_name  text := left(regexp_replace(btrim(coalesce(p ->> 'name', '')), '\s+', ' ', 'g'), 60);
+  v_cat   text := left(regexp_replace(btrim(coalesce(p ->> 'cat', '')), '\s+', ' ', 'g'), 40);
+  v_desc  text := left(regexp_replace(btrim(coalesce(p ->> 'description', '')), '\s+', ' ', 'g'), 160);
+  v_price numeric;
+  v_dur   int;
+  v_row   services;
+begin
+  begin
+    v_price := round((p ->> 'price')::numeric, 2);
+    v_dur := (p ->> 'duration')::int;
+  exception when others then
+    raise exception using errcode = 'PT400', message = 'Preço ou duração inválidos.';
+  end;
+  if length(v_name) < 2 then raise exception using errcode = 'PT400', message = 'Informe o nome do serviço.'; end if;
+  if v_name ~ '[<>"\\`{}]' or v_cat ~ '[<>"\\`{}]' or v_desc ~ '[<>"\\`{}]' then
+    raise exception using errcode = 'PT400', message = 'Não use os caracteres < > " \ ` { }.';
+  end if;
+  if v_price is null or v_price < 0 or v_price > 100000 then raise exception using errcode = 'PT400', message = 'Preço inválido.'; end if;
+  if v_dur is null or v_dur < 5 or v_dur > 600 then raise exception using errcode = 'PT400', message = 'Duração de 5 min a 10 h.'; end if;
+  if v_id is null then
+    if length(v_cat) < 2 then raise exception using errcode = 'PT400', message = 'Informe a categoria.'; end if;
+    v_id := trim(both '-' from left(regexp_replace(lower(translate(v_name,
+      'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')), '[^a-z0-9]+', '-', 'g'), 40));
+    if v_id = '' then v_id := 'servico'; end if;
+    while exists (select 1 from services where id = v_id) loop
+      v_id := left(v_id, 36) || '-' || substr(md5(random()::text), 1, 3);
+    end loop;
+    insert into services (id, cat, name, price, duration, description, sort, active)
+    values (v_id, v_cat, v_name, v_price, v_dur, v_desc, coalesce((select max(sort) from services), 0) + 1,
+            coalesce((p ->> 'active')::boolean, true))
+    returning * into v_row;
+  else
+    update services set name = v_name, cat = coalesce(nullif(v_cat, ''), cat), price = v_price, duration = v_dur,
+           description = case when p ? 'description' then v_desc else description end,
+           active = coalesce((p ->> 'active')::boolean, active)
+     where id = v_id returning * into v_row;
+    if not found then raise exception using errcode = 'PT404', message = 'Serviço não encontrado.'; end if;
+  end if;
+  insert into shop_settings (key, value, updated_at, updated_by)
+  values ('services_log', to_jsonb(v_row.name), now(), v_staff.id)
+  on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by;
+  return to_jsonb(v_row);
+end $$;
+
+-- Horário de funcionamento + intervalo entre horários.
+-- p_days: [{weekday, open, close, breakStart?, breakEnd?}] só dos dias abertos (os outros fecham).
+create or replace function public.staff_save_hours(p_days jsonb, p_step int)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access := _staff_required();
+  d jsonb;
+  v_wd int; v_open time; v_close time; v_bs time; v_be time;
+  v_seen int[] := '{}';
+begin
+  if p_step is null or p_step < 10 or p_step > 120 then
+    raise exception using errcode = 'PT400', message = 'Intervalo entre horários de 10 a 120 min.';
+  end if;
+  if jsonb_typeof(p_days) <> 'array' or jsonb_array_length(p_days) = 0 then
+    raise exception using errcode = 'PT400', message = 'Deixe pelo menos um dia aberto.';
+  end if;
+  for d in select * from jsonb_array_elements(p_days) loop
+    begin
+      v_wd := (d ->> 'weekday')::int;
+      v_open := (d ->> 'open')::time; v_close := (d ->> 'close')::time;
+      v_bs := nullif(d ->> 'breakStart', '')::time; v_be := nullif(d ->> 'breakEnd', '')::time;
+    exception when others then
+      raise exception using errcode = 'PT400', message = 'Horário inválido.';
+    end;
+    if v_wd is null or v_wd not between 0 and 6 or v_wd = any (v_seen) then
+      raise exception using errcode = 'PT400', message = 'Dia da semana inválido.';
+    end if;
+    v_seen := v_seen || v_wd;
+    if v_open is null or v_close is null or v_close <= v_open then
+      raise exception using errcode = 'PT400', message = 'O fechamento precisa ser depois da abertura.';
+    end if;
+    if (v_bs is null) <> (v_be is null) or (v_bs is not null and not (v_bs > v_open and v_be > v_bs and v_close > v_be)) then
+      raise exception using errcode = 'PT400', message = 'O almoço precisa ficar entre a abertura e o fechamento.';
+    end if;
+    insert into business_hours (weekday, open_time, close_time, break_start, break_end)
+    values (v_wd, v_open, v_close, v_bs, v_be)
+    on conflict (weekday) do update set open_time = excluded.open_time, close_time = excluded.close_time,
+      break_start = excluded.break_start, break_end = excluded.break_end;
+  end loop;
+  delete from business_hours where not (weekday = any (v_seen));
+  insert into shop_settings (key, value, updated_at, updated_by) values ('slot_step', to_jsonb(p_step), now(), v_staff.id)
+  on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Endereço e contato: {rua, bairro, cidade, uf, cep, whatsapp, instagram}.
+create or replace function public.staff_save_info(p jsonb)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_staff staff_access := _staff_required();
+  v jsonb := '{}';
+  k text;
+  t text;
+begin
+  foreach k in array array['rua', 'bairro', 'cidade', 'uf', 'cep', 'whatsapp', 'instagram'] loop
+    t := left(regexp_replace(btrim(coalesce(p ->> k, '')), '\s+', ' ', 'g'), 80);
+    if t ~ '[<>"\\`{}]' then raise exception using errcode = 'PT400', message = 'Não use os caracteres < > " \ ` { }.'; end if;
+    v := v || jsonb_build_object(k, t);
+  end loop;
+  v := jsonb_set(v, '{instagram}', to_jsonb(ltrim(v ->> 'instagram', '@')));
+  v := jsonb_set(v, '{uf}', to_jsonb(upper(left(v ->> 'uf', 2))));
+  if length(v ->> 'rua') < 3 or length(v ->> 'cidade') < 2 or length(v ->> 'uf') <> 2 then
+    raise exception using errcode = 'PT400', message = 'Informe rua e número, cidade e UF.';
+  end if;
+  if length(regexp_replace(v ->> 'whatsapp', '\D', '', 'g')) not between 10 and 13 then
+    raise exception using errcode = 'PT400', message = 'WhatsApp inválido (com DDD).';
+  end if;
+  insert into shop_settings (key, value, updated_at, updated_by) values ('info', v, now(), v_staff.id)
+  on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by;
+  return v;
+end $$;
+
 -- Funções internas: ninguém chama direto.
+revoke execute on function public._conflicts(date, time, int, text, uuid) from public, anon, authenticated;
+revoke execute on function public._blocked(date, time, int, text) from public, anon, authenticated;
+revoke execute on function public._staff_required() from public, anon, authenticated;
 revoke execute on function public._placement_error(date, time, int, text, uuid, boolean) from public, anon, authenticated;
 revoke execute on function public._current_staff() from public, anon, authenticated;
 grant execute on function public.busy_intervals(date) to anon, authenticated;
@@ -1011,9 +1218,24 @@ revoke execute on function public._billing_pending() from public, anon, authenti
 -- ----------------------------------------------------------------- cadastro inicial
 {{SQL_BARBEIROS}}
 
+-- Endereço, contato e intervalo: só na primeira vez; depois quem manda é a aba Ajustes.
+insert into public.shop_settings (key, value) values ('slot_step', '{{INTERVALO}}'),
+  ('info', '{{INFO_JSON}}')
+on conflict (key) do nothing;
+
+-- Serviços e horários do cadastro: gravados só quando este arquivo traz um cadastro novo
+-- (versão abaixo). Rodar de novo o mesmo arquivo não desfaz o que a equipe mudou em Ajustes.
+do $seed$
+begin
+  if exists (select 1 from public.shop_settings where key = 'seed_versao' and value = to_jsonb('{{SEED_VERSAO}}'::text)) then
+    return;
+  end if;
 {{SQL_SERVICOS}}
 
 {{SQL_HORARIOS}}
+  insert into public.shop_settings (key, value) values ('seed_versao', to_jsonb('{{SEED_VERSAO}}'::text))
+  on conflict (key) do update set value = excluded.value, updated_at = now();
+end $seed$;
 
 -- Acesso ao painel. Só cria se ainda não existir: rodar de novo não apaga senhas trocadas.
 {{SQL_EQUIPE}}

@@ -64,7 +64,7 @@ html = sub(html, [
     # contatos e endereço
     ('https://www.google.com/maps/dir/?api=1&amp;destination=R.+Cel.+Oleg%C3%A1rio+de+Macedo,+134,+%C3%81gua+Suja,+Castro+-+PR,+84165-690',
      'https://www.google.com/maps/dir/?api=1&amp;destination={{MAPS_DESTINO}}', 1),
-    ('<dd>R. Cel. Olegário de Macedo, 134 – Água Suja, Castro – PR</dd>', '<dd>{{ENDERECO_COMPLETO}}</dd>', 1),
+    ('<dd id="tAddress">R. Cel. Olegário de Macedo, 134 – Água Suja, Castro – PR</dd>', '<dd id="tAddress">{{ENDERECO_COMPLETO}}</dd>', 1),
     ("address: 'R. Cel. Olegário de Macedo, 134 – Água Suja',", "address: '{{ENDERECO_RUA_JS}}',", 1),
     ("city: 'Castro – PR, 84165-690',", "city: '{{ENDERECO_CIDADE_JS}}',", 1),
     ('5542999653210', '{{WHATS_NUMERO}}', None),
@@ -107,6 +107,7 @@ def block(text, start_pat, label, repl):
 sql = block(sql, r"insert into public\.barbers \(id, name, role, owner, bio, sort\) values\n.*?bio = excluded\.bio, sort = excluded\.sort;", 'barbeiros', '{{SQL_BARBEIROS}}')
 sql = block(sql, r"insert into public\.services \(id, cat, name, price, duration, description, tag, sort\) values\n.*?tag = excluded\.tag, sort = excluded\.sort;", 'serviços', '{{SQL_SERVICOS}}')
 sql = block(sql, r"insert into public\.business_hours \(weekday, open_time, close_time, break_start, break_end\) values\n.*?break_end = excluded\.break_end;", 'horários', '{{SQL_HORARIOS}}')
+sql = block(sql, r"  \('info', '\{.*?\}'\)\n", 'info', "  ('info', '{{INFO_JSON}}')\n")
 sql = block(sql, r"insert into public\.staff_access \(id, role, barber_id, pass_hash\) values\n.*?on conflict \(id\) do nothing;", 'equipe', '{{SQL_EQUIPE}}')
 sql = block(sql, r"-- Senhas iniciais do painel \(cada pessoa precisa ter uma senha diferente\):\n--   [^\n]*\n", 'comentário senhas',
             '-- Senhas iniciais do painel (cada pessoa precisa ter uma senha diferente):\n--   {{SENHAS_COMENTARIO}}\n')
@@ -118,7 +119,9 @@ sql = sub(sql, [
     ('pela função "machado" no primeiro uso', 'pela função do Supabase no primeiro uso', 1),
     ("perform cron.schedule('machado-avisos'", "perform cron.schedule('{{SLUG}}-avisos'", 1),
     ("'https://uvdieiiydisobkzoupoj.supabase.co/functions/v1/quick-task/notify'", "'{{SUPABASE_URL}}/functions/v1/{{SUPABASE_FUNCAO}}/notify'", 1),
-    ('  c_step   constant int := 40;', '  c_step   constant int := {{INTERVALO}};', 1),
+    ("where key = 'slot_step'), 40);", "where key = 'slot_step'), {{INTERVALO}});", 1),
+    ("values ('slot_step', '40'),", "values ('slot_step', '{{INTERVALO}}'),", 1),
+    ("'machado-2026-11-13'", "'{{SEED_VERSAO}}'", 2),
     ('-- Barbearia Machado — banco de dados do agendamento (Supabase)', '-- {{NOME}} — banco de dados do agendamento (Supabase)', 1),
 ], 'schema.sql')
 for leftover in ['Machado', 'machado', 'Adão', 'adao', 'emanuel', 'uvdieiiydisobkzoupoj', 'quick-task']:

@@ -61,8 +61,11 @@ O JSON real não aceita comentários (`//`): eles estão aqui só para explicar.
 
 ## Rodar o schema de novo (atualizações)
 
-O `schema.sql` gerado pode ser rodado de novo sem perder agendamentos nem senhas trocadas:
-barbeiros, serviços e horários voltam aos valores do config.json; serviço que saiu da lista fica
-inativo (some para o cliente) e volta se for recolocado; o mesmo vale para barbeiros;
-dia sem horário passa a ficar fechado. Senhas só são criadas para
-quem ainda não existe.
+O `schema.sql` gerado pode ser rodado de novo sem perder agendamentos nem senhas trocadas.
+Barbeiros voltam aos valores do config.json (barbeiro que saiu fica inativo).
+
+Serviços e horários só são regravados quando o config.json muda (o schema guarda uma versão do
+cadastro em `shop_settings.seed_versao`): rodar o mesmo arquivo de novo **não desfaz** o que a
+equipe mudou na aba Ajustes. Endereço/contato e intervalo (`shop_settings.info` e `slot_step`)
+são gravados só na primeira vez; depois valem os da aba Ajustes.
+Senhas só são criadas para quem ainda não existe.
